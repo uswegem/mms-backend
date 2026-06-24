@@ -1,0 +1,34 @@
+import * as Joi from 'joi';
+
+export const envValidationSchema = Joi.object({
+  NODE_ENV: Joi.string()
+    .valid('development', 'production', 'test')
+    .default('development'),
+  PORT: Joi.number().default(3001),
+  DATABASE_URL: Joi.string().required(),
+  DIRECT_DATABASE_URL: Joi.string().required(),
+  SUPABASE_URL: Joi.string().uri().optional(),
+  SUPABASE_SERVICE_ROLE_KEY: Joi.string().optional(),
+  REDIS_URL: Joi.string().optional(),
+  REDIS_ENABLED: Joi.string().valid('true', 'false').optional(),
+  RABBITMQ_URL: Joi.string().optional(),
+  RABBITMQ_ENABLED: Joi.string().valid('true', 'false').optional(),
+  RABBITMQ_EXCHANGE: Joi.string().optional(),
+  CORS_ORIGIN: Joi.string().optional(),
+  JWT_ACCESS_SECRET: Joi.string().optional(),
+  JWT_REFRESH_SECRET: Joi.string().optional(),
+  JWT_ACCESS_EXPIRES_IN: Joi.string().optional(),
+  JWT_REFRESH_EXPIRES_IN: Joi.string().optional(),
+  SWAGGER_ENABLED: Joi.string().valid('true', 'false').optional(),
+  SWAGGER_TITLE: Joi.string().optional(),
+  SWAGGER_DESCRIPTION: Joi.string().optional(),
+  SWAGGER_VERSION: Joi.string().optional(),
+  AUDIT_ENABLED: Joi.string().valid('true', 'false').optional(),
+  AUTH_MAX_FAILED_ATTEMPTS: Joi.number().optional(),
+  AUTH_LOCKOUT_MINUTES: Joi.number().optional(),
+  AUTH_REFRESH_COOKIE_NAME: Joi.string().optional(),
+  AUTH_PASSWORD_RESET_HOURS: Joi.number().optional(),
+  MFA_ENCRYPTION_KEY: Joi.string().length(64).optional(),
+  MFA_ISSUER: Joi.string().optional(),
+  BCRYPT_ROUNDS: Joi.number().optional(),
+});

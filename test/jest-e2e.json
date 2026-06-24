@@ -1,0 +1,15 @@
+{
+  "moduleFileExtensions": ["js", "json", "ts"],
+  "rootDir": ".",
+  "testEnvironment": "node",
+  "testRegex": ".e2e-spec.ts$",
+  "transform": {
+    "^.+\\.(t|j)s$": "ts-jest"
+  },
+  "moduleNameMapper": {
+    "^otplib$": "<rootDir>/__mocks__/otplib.ts",
+    "^@shared/(.*)$": "<rootDir>/../src/shared/$1",
+    "^@infrastructure/(.*)$": "<rootDir>/../src/infrastructure/$1",
+    "^@modules/(.*)$": "<rootDir>/../src/modules/$1"
+  }
+}
