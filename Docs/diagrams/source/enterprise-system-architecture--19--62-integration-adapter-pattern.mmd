@@ -1,0 +1,26 @@
+classDiagram
+  class IntegrationPort {
+    <<interface>>
+    +execute(command)
+  }
+  class TipsAdapter {
+    +registerMerchant()
+    +parsePaymentNotification()
+    +initiateReversal()
+  }
+  class CbsAdapter {
+    +creditSettlementAccount()
+    +verifyAccount()
+    +getEodStatement()
+  }
+  class TipsMockAdapter
+  class TipsLiveAdapter
+  class CbsMockAdapter
+  class CbsLiveAdapter
+
+  IntegrationPort <|.. TipsAdapter
+  IntegrationPort <|.. CbsAdapter
+  TipsAdapter <|-- TipsMockAdapter
+  TipsAdapter <|-- TipsLiveAdapter
+  CbsAdapter <|-- CbsMockAdapter
+  CbsAdapter <|-- CbsLiveAdapter

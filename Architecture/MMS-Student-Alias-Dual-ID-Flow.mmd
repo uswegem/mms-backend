@@ -1,0 +1,59 @@
+%%{init: {'flowchart': {'nodeSpacing': 45, 'rankSpacing': 55}, 'themeVariables': {'fontSize': '20px'}}}%%
+flowchart TB
+  classDef header fill:#FFF176,stroke:#F57F17,stroke-width:3px,color:#000
+  classDef step fill:#E3F2FD,stroke:#1565C0,stroke-width:2px,color:#000
+  classDef policy fill:#FFEBEE,stroke:#C62828,stroke-width:2px,color:#000
+  classDef idbox fill:#E8F5E9,stroke:#2E7D32,stroke-width:2px,color:#000
+
+  subgraph TIMING["WHEN IDs & QR ARE ISSUED"]
+    direction LR
+    T1["School approved"]:::step
+    T2["Student created / bulk upload"]:::step
+    T1 -->|"TIPS reg + school alias + static QR"| SA["School Level"]:::idbox
+    T2 -->|"Lipa Namba + internal ID + static TANQR"| ST["Student Level"]:::idbox
+  end
+
+  subgraph DUAL["DUAL ID PER STUDENT"]
+    direction LR
+    PUB["PUBLIC ALIAS — Lipa Namba<br/><b>780XXXXXX</b><br/>Tag 26/02 · TIPS registered<br/>Parent types this number"]:::idbox
+    INT["INTERNAL ROUTING ID<br/><b>SSSSSSSC</b><br/>Tag 62/05 · MMS only<br/>Routes payment to student"]:::idbox
+    PUB -.->|"embedded in same QR"| INT
+  end
+
+  subgraph BULK["BULK STUDENT UPLOAD"]
+    direction TB
+    CSV["CSV Upload"]:::step
+    NEW["New student → generate alias"]:::step
+    RET["Returning student → reactivate only"]:::step
+    CSV --> NEW & RET
+    NEW --> DUAL
+    RET --> DUAL
+  end
+
+  subgraph PAY["PAYMENT FLOW — funds always to school account"]
+    direction TB
+    P1["1. Parent enters Lipa Namba"]:::step
+    P2["2. TIPS resolves to school account"]:::step
+    P3["3. School settlement account credited"]:::step
+    P4["4. TIPS webhook to MMS"]:::step
+    P5["5. MMS reads tag 62/05 internal ID"]:::step
+    P6["6. Lookup student_aliases table"]:::step
+    P7["7. Allocate to student invoices"]:::step
+    P8["8. SMS guardian — balance update"]:::step
+    P1 --> P2 --> P3 --> P4 --> P5 --> P6 --> P7 --> P8
+  end
+
+  subgraph POLICY["PERMANENT ALIAS POLICY"]
+    direction TB
+    POL1["One Lipa Namba per student for entire course"]:::policy
+    POL2["Survives class promotion & academic years"]:::policy
+    POL3["Departed → deactivate + TIPS deregister"]:::policy
+    POL4["Number never reused"]:::policy
+  end
+
+  ST --> DUAL
+  DUAL -->|"async"| REG["TIPS Alias Registration"]:::step
+  REG --> PAY
+  POLICY -.-> ST
+
+  class TIMING,DUAL,BULK,PAY,POLICY header

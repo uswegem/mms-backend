@@ -1,0 +1,10 @@
+flowchart TD
+  A[Settlement line ready] --> B{CBS call}
+  B -->|Success| C[Mark POSTED]
+  B -->|Transient| D[Retry queue max 5]
+  B -->|Hard fail| E[Mark FAILED]
+  D --> B
+  E --> F[Ops exception queue]
+  F --> G{Manual action}
+  G -->|Retry| B
+  G -->|Cancel| H[Reverse internal ledger]

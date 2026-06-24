@@ -1,0 +1,21 @@
+sequenceDiagram
+  participant U as User
+  participant N as Next.js
+  participant A as Auth Service
+  participant R as Redis
+  participant DB as PostgreSQL
+
+  U->>N: Login credentials + MFA
+  N->>A: POST /auth/login
+  A->>DB: Validate user + roles
+  A->>A: Issue access JWT 15m
+  A->>DB: Store refresh token hash
+  A->>R: Session metadata
+  A-->>N: accessToken + httpOnly refresh cookie
+  N->>A: API calls with Bearer JWT
+  A->>A: Validate signature + claims
+  alt token expired
+    N->>A: POST /auth/refresh
+    A->>DB: Rotate refresh token
+    A-->>N: New access JWT
+  end

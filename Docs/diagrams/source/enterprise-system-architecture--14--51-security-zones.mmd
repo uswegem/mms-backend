@@ -1,0 +1,41 @@
+flowchart TB
+  subgraph zone_public [Zone: Public Internet]
+    Browser[Browsers]
+    Mobile[Issuer Mobile Apps - external]
+  end
+
+  subgraph zone_dmz [Zone: DMZ]
+    WAF[WAF]
+    ALB[ALB TLS termination]
+    CF[CloudFront]
+  end
+
+  subgraph zone_app [Zone: Application Private]
+    API[NestJS API]
+    WEB[Next.js]
+    Workers[Workers]
+  end
+
+  subgraph zone_data [Zone: Data Private - no internet]
+    RDS[(RDS)]
+    Redis[(Redis)]
+    RMQ[(RabbitMQ)]
+  end
+
+  subgraph zone_mgmt [Zone: Management]
+    Bastion[Bastion / SSM]
+    CI[CI/CD]
+  end
+
+  subgraph zone_partner [Zone: Partner - egress only]
+    TIPS[TIPS]
+    CBS[CBS]
+    SMS[SMS GW]
+  end
+
+  Browser --> CF --> WAF --> ALB
+  ALB --> WEB & API
+  API & Workers --> RDS & Redis & RMQ
+  API & Workers -->|mTLS optional| TIPS & CBS & SMS
+  CI -->|deploy| API
+  Bastion -.->|SSM session| RDS

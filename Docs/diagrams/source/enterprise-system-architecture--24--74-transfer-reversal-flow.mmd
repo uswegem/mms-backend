@@ -1,0 +1,13 @@
+sequenceDiagram
+  participant Ops as Operations
+  participant MMS as DisputesModule
+  participant TIPS as TIPS
+  participant Pay as PaymentsModule
+  participant DB as PostgreSQL
+
+  Ops->>MMS: Initiate reversal
+  MMS->>DB: payment status REVERSAL_PENDING
+  MMS->>TIPS: POST reversal request
+  TIPS-->>MMS: reversal accepted
+  MMS->>DB: payment status REVERSED
+  MMS->>DB: audit log

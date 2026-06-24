@@ -1,0 +1,12 @@
+flowchart TD
+  E[Exception] --> T1[MMS only - missing in TIPS]
+  E --> T2[TIPS only - missing in MMS]
+  E --> T3[Amount mismatch]
+  E --> T4[CBS posting mismatch]
+  E --> T5[Timing cut-off difference]
+
+  T1 --> R1[Investigate webhook failure]
+  T2 --> R2[Manual payment ingest]
+  T3 --> R3[Fee config review]
+  T4 --> R4[Retry CBS posting]
+  T5 --> R5[Roll to next cycle]

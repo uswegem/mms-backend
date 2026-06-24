@@ -1,0 +1,20 @@
+flowchart TB
+  MMS[MMS NestJS Platform]
+
+  MMS <-->|REST/mTLS webhooks| TIPS[TIPS Switch]
+  MMS <-->|REST/SOAP ISO20022| CBS[Core Banking]
+  MMS -->|REST| AML[AML Screening]
+  MMS -->|SMPP/REST| SMS[SMS Gateway]
+  MMS -->|SMTP/SES| Email[Email]
+  MMS -->|S3 API| S3[AWS S3]
+  MMS -.->|future| GePG[GePG]
+  MMS -.->|optional| ERP[School ERP]
+
+  Meta[Metabase] -->|read-only JDBC| RDS[(PostgreSQL Replica)]
+
+  subgraph patterns [Integration Patterns]
+    P1[Synchronous - query/command]
+    P2[Async webhook - TIPS payments]
+    P3[Async message - RabbitMQ jobs]
+    P4[Batch file - recon CBS EOD]
+  end

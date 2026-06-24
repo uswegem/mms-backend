@@ -1,0 +1,23 @@
+sequenceDiagram
+  participant TIPS as TIPS Switch
+  participant Hook as Payment Webhook
+  participant Pay as PaymentsModule
+  participant Idem as Idempotency Store
+  participant DB as PostgreSQL
+  participant Q as RabbitMQ
+  participant W as Notify Worker
+
+  TIPS->>Hook: POST payment confirmation
+  Hook->>Hook: Verify mTLS / HMAC signature
+  Hook->>Idem: Check tipsEndToEndId
+  alt duplicate
+    Hook-->>TIPS: 200 OK already processed
+  else new
+    Hook->>Pay: ProcessPaymentNotification
+    Pay->>DB: INSERT payment SUCCESS
+    Pay->>DB: INSERT payment_event
+    Pay->>Q: publish payment.received
+    Hook-->>TIPS: 200 OK
+    Q->>W: consume event
+    W->>W: SMS/email merchant
+  end

@@ -1,0 +1,12 @@
+stateDiagram-v2
+  [*] --> OPEN: cut-off reached
+  OPEN --> CALCULATED: aggregate payments
+  CALCULATED --> PENDING_APPROVAL: fee applied
+  PENDING_APPROVAL --> APPROVED: finance approves
+  PENDING_APPROVAL --> REJECTED: sent back
+  REJECTED --> CALCULATED: recalc
+  APPROVED --> POSTING: CBS worker
+  POSTING --> POSTED: all lines success
+  POSTING --> PARTIAL_POSTED: some failures
+  PARTIAL_POSTED --> POSTED: retry success
+  POSTED --> [*]

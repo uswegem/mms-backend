@@ -1,0 +1,62 @@
+flowchart TB
+  subgraph presentation [Presentation Layer]
+    AdminUI[Acquirer Admin Portal]
+    MerchantUI[Merchant Portal]
+    SchoolUI[School Fees Portal]
+    PublicAPI[Developer API Docs]
+  end
+
+  subgraph gateway [Edge & Gateway Layer]
+    WAF[AWS WAF]
+    ALB[Application Load Balancer]
+    CDN[CloudFront - static assets]
+    APIGW[API Gateway / BFF optional]
+  end
+
+  subgraph application [Application Layer - NestJS]
+    AuthSvc[Identity & Auth]
+    MerchantSvc[Merchant Domain]
+    QREngine[TANQR Engine]
+    PaymentSvc[Payment Ingestion]
+    SettlementSvc[Settlement]
+    ReconSvc[Reconciliation]
+    SchoolSvc[School Fees]
+    NotifySvc[Notifications]
+    ReportSvc[Reporting API]
+  end
+
+  subgraph integration [Integration Layer]
+    TIPSAdapter[TIPS Adapter]
+    CBSAdapter[CBS Adapter]
+    ChannelAdapters[SMS / Email / GePG]
+  end
+
+  subgraph data_layer [Data Layer]
+    PG[(PostgreSQL Primary)]
+    PGRO[(Read Replica)]
+    Redis[(Redis)]
+    S3[(S3)]
+  end
+
+  subgraph messaging [Messaging Layer]
+    RMQ[RabbitMQ]
+  end
+
+  AdminUI & MerchantUI & SchoolUI --> CDN
+  AdminUI & MerchantUI & SchoolUI --> ALB
+  ALB --> WAF
+  WAF --> APIGW
+  APIGW --> AuthSvc & MerchantSvc & QREngine & PaymentSvc & SchoolSvc & ReportSvc
+  PaymentSvc --> TIPSAdapter
+  SettlementSvc --> CBSAdapter
+  MerchantSvc --> QREngine
+  SchoolSvc --> QREngine
+  AuthSvc & MerchantSvc & PaymentSvc --> PG
+  AuthSvc --> Redis
+  PaymentSvc & SettlementSvc & NotifySvc --> RMQ
+  NotifySvc --> ChannelAdapters
+  TIPSAdapter --> TIPSExt[TIPS]
+  CBSAdapter --> CBSExt[CBS]
+  ReportSvc --> PGRO
+  MerchantSvc --> S3
+  QREngine --> S3

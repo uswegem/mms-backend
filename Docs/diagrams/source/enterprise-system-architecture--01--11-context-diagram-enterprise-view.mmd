@@ -1,0 +1,56 @@
+flowchart TB
+  subgraph external_users [External Users]
+    Payer[Payer / Parent]
+    MerchantUser[Merchant / School Bursar]
+    AcquirerOps[Acquirer Operations]
+    Compliance[Compliance / Risk]
+  end
+
+  subgraph mms_platform [MMS Platform - Acquirer]
+    Portal[Next.js Portals]
+    API[NestJS API Layer]
+    Workers[Background Workers]
+    Data[(PostgreSQL)]
+    Cache[(Redis)]
+    Queue[RabbitMQ]
+    Files[AWS S3]
+  end
+
+  subgraph national [National Payment Infrastructure]
+    TIPS[TIPS Switch]
+    Issuers[Issuer Banks / EMIs]
+  end
+
+  subgraph bank_internal [Bank Internal Systems]
+    CBS[Core Banking System]
+    AML[AML / Screening]
+    GL[General Ledger]
+    SMS[SMS Gateway]
+  end
+
+  subgraph optional [Optional / Future]
+    GePG[GePG]
+    Meta[Metabase BI]
+  end
+
+  Payer -->|Scan QR / Lipa Namba| Issuers
+  Issuers --> TIPS
+  TIPS -->|Payment notify / settlement| API
+  MerchantUser --> Portal
+  AcquirerOps --> Portal
+  Compliance --> Portal
+  Portal -->|HTTPS JWT| API
+  API --> Data
+  API --> Cache
+  API --> Queue
+  API --> Files
+  Workers --> Queue
+  Workers --> Data
+  API --> CBS
+  API --> AML
+  Workers --> SMS
+  Workers --> CBS
+  Workers --> GL
+  Meta -->|Read replica| Data
+  API -.-> GePG
+  TIPS --> Issuers

@@ -1,0 +1,54 @@
+erDiagram
+  ACQUIRERS ||--o{ USERS : employs
+  ACQUIRERS ||--o{ MERCHANTS : acquires
+  ACQUIRERS ||--o{ FEE_RULES : defines
+
+  USERS ||--o| AUTH_CREDENTIALS : has
+  USERS ||--o{ USER_ROLES : assigned
+  ROLES ||--o{ ROLE_PERMISSIONS : grants
+  PERMISSIONS ||--o{ ROLE_PERMISSIONS : included
+
+  MERCHANTS ||--|| MERCHANT_PROFILES : has
+  MERCHANTS ||--o{ STORES : owns
+  STORES ||--o{ TERMINALS : has
+  MERCHANTS ||--o{ SETTLEMENT_ACCOUNTS : credits
+  MERCHANTS ||--o| TIPS_REGISTRATIONS : registered
+  MERCHANTS ||--o| MERCHANT_ALIASES : lipa_namba
+  MERCHANTS ||--o{ QR_CODES : displays
+
+  MERCHANTS ||--o{ PAYMENTS : receives
+  PAYMENTS ||--|| PAYMENT_METADATA : extends
+  PAYMENTS ||--o{ PAYMENT_EVENTS : logs
+  PAYMENTS ||--o{ SETTLEMENT_LINES : settled
+
+  SETTLEMENT_BATCHES ||--o{ SETTLEMENT_LINES : contains
+  SETTLEMENT_LINES ||--o| CBS_POSTINGS : posts
+
+  MERCHANTS ||--o| SCHOOLS : may_be
+  SCHOOLS ||--o{ STUDENTS : enrolls
+  STUDENTS ||--o{ INVOICES : billed
+  INVOICES ||--o{ PAYMENT_ALLOCATIONS : paid_by
+  PAYMENTS ||--o{ PAYMENT_ALLOCATIONS : allocates
+
+  ACQUIRERS {
+    uuid id PK
+    varchar code UK
+    char tips_acquirer_id_5
+    timestamptz deleted_at
+  }
+
+  MERCHANTS {
+    uuid id PK
+    uuid acquirer_id FK
+    varchar trading_name
+    merchant_status status
+    char mcc FK
+    timestamptz deleted_at
+  }
+
+  PAYMENTS {
+    uuid id PK
+    varchar tips_end_to_end_id UK
+    numeric amount
+    payment_status status
+  }

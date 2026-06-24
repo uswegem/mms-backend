@@ -1,0 +1,25 @@
+flowchart TB
+  subgraph clients [Clients]
+    Web[Next.js Frontend :3000]
+  end
+
+  subgraph edge [Edge]
+    Nginx[Nginx]
+  end
+
+  subgraph app [Application]
+    API[NestJS API :3001]
+  end
+
+  subgraph data [Data]
+    PG[(PostgreSQL / Supabase)]
+    Redis[(Redis)]
+    RMQ[RabbitMQ]
+  end
+
+  Web --> Nginx
+  Nginx --> Web
+  Nginx -->|/api/*| API
+  API --> PG
+  API --> Redis
+  API --> RMQ

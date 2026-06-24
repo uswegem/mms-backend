@@ -1,0 +1,27 @@
+erDiagram
+  ACQUIRER ||--o{ MERCHANT : owns
+  MERCHANT ||--o{ STORE : has
+  STORE ||--o{ TERMINAL : has
+  MERCHANT ||--o{ MERCHANT_KYC : has
+  MERCHANT ||--|| TIPS_REGISTRATION : has
+  MERCHANT ||--o{ QR_CODE : has
+  MERCHANT ||--o| MERCHANT_ALIAS : has
+  MERCHANT ||--o{ SETTLEMENT_ACCOUNT : has
+
+  PAYMENT ||--o{ PAYMENT_EVENT : logs
+  PAYMENT }o--|| MERCHANT : belongs
+  PAYMENT }o--o| TERMINAL : at
+
+  SETTLEMENT_BATCH ||--o{ SETTLEMENT_LINE : contains
+  SETTLEMENT_LINE }o--|| PAYMENT : references
+
+  RECON_RUN ||--o{ RECON_EXCEPTION : may_have
+
+  SCHOOL ||--|| MERCHANT : extends
+  SCHOOL ||--o{ STUDENT : enrolls
+  STUDENT ||--o{ INVOICE : billed
+  INVOICE ||--o{ PAYMENT_ALLOCATION : paid_by
+  PAYMENT_ALLOCATION }o--|| PAYMENT : from
+
+  USER ||--o{ USER_ROLE : has
+  AUDIT_LOG }o--o| USER : actor

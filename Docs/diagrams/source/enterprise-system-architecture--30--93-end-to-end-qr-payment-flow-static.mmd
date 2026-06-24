@@ -1,0 +1,19 @@
+sequenceDiagram
+  participant Merchant as Merchant
+  participant Payer as Payer
+  participant Issuer as Issuer App
+  participant TIPS as TIPS
+  participant MMS as MMS
+  participant CBS as CBS
+
+  Merchant->>Merchant: Display static TANQR
+  Payer->>Issuer: Scan QR
+  Issuer->>Issuer: Decode EMV payload verify CRC
+  Issuer->>Payer: Show merchant name amount entry
+  Payer->>Issuer: Confirm amount
+  Issuer->>TIPS: Payment initiation
+  TIPS->>TIPS: Route issuer to acquirer
+  TIPS->>MMS: Payment notification webhook
+  MMS->>MMS: Post payment + notify merchant
+  TIPS->>CBS: Settlement per TIPS rules
+  MMS->>Merchant: Real-time notification

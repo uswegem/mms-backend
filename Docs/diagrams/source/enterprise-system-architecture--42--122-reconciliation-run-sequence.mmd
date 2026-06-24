@@ -1,0 +1,20 @@
+sequenceDiagram
+  participant Sched as Scheduler
+  participant Recon as ReconciliationModule
+  participant DB as PostgreSQL
+  participant TIPS as TIPS Reports
+  participant CBS as CBS EOD
+  participant Ops as Operations
+
+  Sched->>Recon: Start daily recon T+1
+  Recon->>DB: snapshot MMS payments
+  Recon->>TIPS: Fetch settlement file API
+  Recon->>CBS: Fetch statement API
+  Recon->>Recon: Match on tipsEndToEndId amount date
+  Recon->>DB: recon_matches
+  alt exceptions found
+    Recon->>DB: recon_exceptions UNMATCHED
+    Recon->>Ops: Alert dashboard
+  else all matched
+    Recon->>DB: recon_run CLOSED
+  end

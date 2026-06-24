@@ -1,0 +1,46 @@
+erDiagram
+  ACQUIRERS ||--o{ ONBOARDING_APPLICATIONS : receives
+  ONBOARDING_APPLICATIONS ||--o| MERCHANTS : creates
+  ONBOARDING_APPLICATIONS ||--o{ ONBOARDING_STEPS : steps
+  ONBOARDING_APPLICATIONS ||--o{ KYC_SUBMISSIONS : documents
+  ONBOARDING_APPLICATIONS ||--o{ KYC_REVIEWS : reviews
+  ONBOARDING_APPLICATIONS ||--o{ BENEFICIAL_OWNERS : owners
+  ONBOARDING_APPLICATIONS ||--o{ AML_SCREENING_RESULTS : aml
+
+  MERCHANTS ||--|| MERCHANT_PROFILES : address
+  MERCHANTS ||--o{ STORES : outlets
+  MERCHANTS ||--o{ TERMINALS : via_stores
+  MERCHANTS ||--o{ SETTLEMENT_ACCOUNTS : bank
+  MERCHANTS ||--o| MERCHANT_LIMITS : limits
+  MERCHANTS ||--o{ MERCHANT_DOCUMENTS : docs
+  MERCHANTS }o--|| MCC_REFERENCE : category
+  MERCHANT_PROFILES }o--|| POSTCODE_REFERENCE : postal
+
+  MERCHANTS {
+    uuid id PK
+    uuid acquirer_id FK
+    varchar legal_name
+    varchar trading_name
+    merchant_status status
+    char mcc FK
+    boolean is_school
+  }
+
+  ONBOARDING_APPLICATIONS {
+    uuid id PK
+    onboarding_status status
+    varchar application_no UK
+    uuid merchant_id FK
+  }
+
+  STORES {
+    uuid id PK
+    uuid merchant_id FK
+    varchar store_label UK
+  }
+
+  TERMINALS {
+    uuid id PK
+    uuid store_id FK
+    varchar terminal_label UK
+  }

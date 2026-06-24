@@ -1,0 +1,8 @@
+flowchart TD
+  P[Payment received] --> A{Amount vs invoice}
+  A -->|Exact| PAID[Mark PAID]
+  A -->|Overpay| OVER[Credit student balance]
+  A -->|Underpay| PART[Mark PARTIAL open]
+  PART --> N[Notify bursar]
+  OVER --> N
+  PAID --> R[Generate receipt PDF]

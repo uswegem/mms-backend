@@ -1,0 +1,34 @@
+flowchart LR
+  subgraph producers [API Producers]
+    API1[NestJS API]
+  end
+
+  subgraph exchanges [RabbitMQ Exchanges]
+    EX_PAY[payments.exchange]
+    EX_SET[settlement.exchange]
+    EX_NOT[notifications.exchange]
+    EX_RECON[reconciliation.exchange]
+  end
+
+  subgraph queues [Queues]
+    Q_PAY[payments.notify.q]
+    Q_SET[settlement.batch.q]
+    Q_SMS[sms.send.q]
+    Q_EMAIL[email.send.q]
+    Q_RECON[recon.run.q]
+    Q_DLQ[dead.letter.q]
+  end
+
+  subgraph consumers [Worker Consumers]
+    W1[PaymentNotifyWorker]
+    W2[SettlementBatchWorker]
+    W3[NotificationWorker]
+    W4[ReconciliationWorker]
+  end
+
+  API1 --> EX_PAY & EX_SET & EX_NOT & EX_RECON
+  EX_PAY --> Q_PAY --> W1
+  EX_SET --> Q_SET --> W2
+  EX_NOT --> Q_SMS & Q_EMAIL --> W3
+  EX_RECON --> Q_RECON --> W4
+  Q_PAY & Q_SET & Q_SMS & Q_EMAIL & Q_RECON -.->|fail| Q_DLQ

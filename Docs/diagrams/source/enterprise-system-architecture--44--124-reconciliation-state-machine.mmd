@@ -1,0 +1,10 @@
+stateDiagram-v2
+  [*] --> INITIATED
+  INITIATED --> DATA_COLLECTED: all sources loaded
+  DATA_COLLECTED --> MATCHING: engine running
+  MATCHING --> CLOSED: zero exceptions
+  MATCHING --> EXCEPTIONS_OPEN: breaks found
+  EXCEPTIONS_OPEN --> IN_REVIEW: ops assigned
+  IN_REVIEW --> CLOSED: all resolved
+  IN_REVIEW --> ESCALATED: compliance
+  CLOSED --> [*]

@@ -1,0 +1,21 @@
+flowchart LR
+  subgraph onboarding [Merchant Onboarding]
+    A[Application/KYC] --> B[Risk Approval]
+    B --> C[MCC & Profile]
+    C --> D[TIPS Registration]
+    D --> E[QR / Lipa Namba Issuance]
+  end
+  subgraph payment [Payment Acceptance]
+    P[Payer scans QR or dials Lipa Namba]
+    P --> Q[Issuer App / USSD]
+    Q --> R[TIPS Routing]
+    R --> S[Settlement to Merchant]
+    S --> T[MMS Notification & Posting]
+  end
+  subgraph school [School Fees]
+    SF1[Fee Structure Setup] --> SF2[Student/Control Number]
+    SF2 --> SF3[Dynamic QR / Bill]
+    SF3 --> SF4[Payment & Receipt]
+  end
+  onboarding --> payment
+  school --> payment

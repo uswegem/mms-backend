@@ -1,0 +1,66 @@
+erDiagram
+  MERCHANTS ||--o| TIPS_REGISTRATIONS : tips_id26
+  MERCHANTS ||--o| MERCHANT_ALIASES : school_adhoc_alias
+  MERCHANTS ||--o| SCHOOL_SEQUENCES : school_seq
+  MERCHANTS ||--o{ STUDENT_ALIASES : student_aliases
+  MERCHANTS ||--o{ QR_CODES : qr
+  STUDENTS ||--o| STUDENT_ALIASES : permanent_lipa_namba
+  QR_CODES ||--o{ QR_PAYLOAD_VERSIONS : versions
+  QR_CODES ||--o{ QR_RENDER_ASSETS : assets
+  ACQUIRERS ||--o{ ACQUIRER_CODE_BLOCKS : alias_blocks
+
+  TIPS_REGISTRATIONS {
+    uuid id PK
+    uuid merchant_id FK_UK
+    char acquirer_id_5
+    varchar merchant_id_15 UK
+    varchar domain_name
+    tips_registration_status status
+  }
+
+  MERCHANT_ALIASES {
+    uuid id PK
+    uuid merchant_id FK_UK
+    char alias_8digit UK
+    char acquirer_code_3
+    char alias_seq_4
+    char checksum_1
+  }
+
+  SCHOOL_SEQUENCES {
+    uuid merchant_id PK_FK
+    char school_seq_3
+    int last_student_seq
+  }
+
+  STUDENT_ALIASES {
+    uuid id PK
+    uuid student_id FK_UK
+    uuid merchant_id FK
+    char alias_8digit UK
+    char internal_id_8digit UK
+    char acquirer_code_3
+    char alias_seq_4
+    char school_seq_3
+    char student_seq_4
+    boolean tips_registered
+    boolean is_active
+  }
+
+  QR_CODES {
+    uuid id PK
+    uuid merchant_id FK
+    uuid student_id FK
+    qr_type qr_type
+    qr_status status
+    char poi_method
+  }
+
+  QR_PAYLOAD_VERSIONS {
+    uuid id PK
+    uuid qr_id FK
+    text tlv_payload
+    char crc_value
+    varchar tag_26_02_alias
+    varchar tag_62_05_internal_id
+  }

@@ -1,0 +1,14 @@
+flowchart TB
+  User[User] --> Role[Role]
+  Role --> Perm[Permission]
+  Perm --> Res[Resource + Action]
+
+  subgraph examples [Example Permissions]
+    E1[merchant:approve]
+    E2[payment:read]
+    E3[settlement:execute]
+    E4[report:regulatory]
+    E5[school:invoice:create]
+  end
+
+  Res --> examples

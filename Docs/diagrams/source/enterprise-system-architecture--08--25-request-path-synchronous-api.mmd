@@ -1,0 +1,18 @@
+sequenceDiagram
+  participant U as User Browser
+  participant N as Next.js
+  participant A as NestJS API
+  participant R as Redis
+  participant P as PostgreSQL
+
+  U->>N: Page action
+  N->>A: HTTPS + Bearer JWT
+  A->>A: JWT validate + RBAC guard
+  A->>R: Optional cache read
+  alt cache miss
+    A->>P: Query / transaction
+    P-->>A: Result
+    A->>R: Cache write
+  end
+  A-->>N: JSON response
+  N-->>U: Render UI

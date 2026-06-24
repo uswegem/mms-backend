@@ -1,0 +1,14 @@
+sequenceDiagram
+  participant Ops as Acquirer Ops
+  participant MMS as MerchantsModule
+  participant CBS as Core Banking
+  participant DB as PostgreSQL
+
+  Ops->>MMS: Submit settlement account
+  MMS->>CBS: Account enquiry API
+  CBS-->>MMS: Account name match result
+  alt match OK
+    MMS->>DB: settlement_account VERIFIED
+  else mismatch
+    MMS->>DB: flag KYC exception
+  end

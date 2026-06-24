@@ -1,0 +1,46 @@
+# Local infrastructure for MMS (Redis, RabbitMQ). Postgres: use Supabase or uncomment postgres service.
+services:
+  redis:
+    image: redis:7-alpine
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+
+  rabbitmq:
+    image: rabbitmq:3-management-alpine
+    ports:
+      - "5672:5672"
+      - "15672:15672"
+    environment:
+      RABBITMQ_DEFAULT_USER: mms
+      RABBITMQ_DEFAULT_PASS: mms
+    volumes:
+      - rabbitmq_data:/var/lib/rabbitmq
+    healthcheck:
+      test: ["CMD", "rabbitmq-diagnostics", "-q", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # Optional local Postgres (disable when using Supabase)
+  # postgres:
+  #   image: postgres:16-alpine
+  #   ports:
+  #     - "5432:5432"
+  #   environment:
+  #     POSTGRES_USER: mms
+  #     POSTGRES_PASSWORD: mms
+  #     POSTGRES_DB: mms
+  #   volumes:
+  #     - postgres_data:/var/lib/postgresql/data
+
+volumes:
+  redis_data:
+  rabbitmq_data:
+  # postgres_data:

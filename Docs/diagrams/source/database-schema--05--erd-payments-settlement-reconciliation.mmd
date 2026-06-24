@@ -1,0 +1,48 @@
+erDiagram
+  MERCHANTS ||--o{ PAYMENTS : txn
+  PAYMENTS ||--|| PAYMENT_METADATA : meta
+  PAYMENTS ||--o{ PAYMENT_EVENTS : events
+  PAYMENTS ||--o{ REFUNDS : refunds
+  PAYMENTS ||--o| SETTLEMENT_LINES : one_line
+  SETTLEMENT_BATCHES ||--o{ SETTLEMENT_LINES : batch
+  SETTLEMENT_LINES ||--o| CBS_POSTINGS : cbs
+
+  ACQUIRERS ||--o{ RECON_RUNS : daily
+  RECON_RUNS ||--o{ RECON_SOURCES : sources
+  RECON_RUNS ||--o{ RECON_MATCHES : matches
+  RECON_RUNS ||--o{ RECON_EXCEPTIONS : breaks
+  RECON_EXCEPTIONS ||--o{ RECON_RESOLUTIONS : resolved
+
+  PAYMENTS {
+    uuid id PK
+    varchar tips_end_to_end_id UK
+    numeric amount
+    payment_status status
+    payment_channel channel
+    timestamptz received_at
+  }
+
+  SETTLEMENT_BATCHES {
+    uuid id PK
+    varchar batch_no UK
+    settlement_batch_status status
+    numeric net_total
+  }
+
+  SETTLEMENT_LINES {
+    uuid id PK
+    uuid payment_id FK_UK
+    numeric net_amount
+  }
+
+  CBS_POSTINGS {
+    uuid id PK
+    varchar idempotency_key UK
+    cbs_posting_status status
+  }
+
+  RECON_EXCEPTIONS {
+    uuid id PK
+    recon_exception_status status
+    varchar exception_type
+  }

@@ -1,0 +1,8 @@
+flowchart LR
+  Gross[Gross payment amount] --> MDR[MDR acquirer fee]
+  Gross --> Switch[TIPS switch fee]
+  MDR --> Net[Net to merchant]
+  Switch --> Net
+  Net --> CBS[Credit merchant CBS account]
+  MDR --> GL1[Acquirer income GL]
+  Switch --> GL2[Pass-through GL]

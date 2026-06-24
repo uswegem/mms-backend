@@ -1,0 +1,51 @@
+flowchart TB
+  subgraph bootstrap [NestJS Application]
+    Main[main.ts bootstrap]
+    Config[ConfigModule]
+    Health[HealthModule]
+  end
+
+  subgraph cross_cutting [Cross-Cutting]
+    Logger[LoggingModule - structured JSON]
+    Audit[AuditModule]
+    Idempotency[IdempotencyModule]
+    Validation[ValidationPipe / class-validator]
+  end
+
+  subgraph domain_modules [Domain Modules]
+    AuthMod[AuthModule]
+    UserMod[UsersModule]
+    MerchantMod[MerchantsModule]
+    TipsRegMod[TipsRegistrationModule]
+    QRMod[TanqrModule]
+    AliasMod[LipaNambaModule]
+    PaymentMod[PaymentsModule]
+    SettlementMod[SettlementModule]
+    ReconMod[ReconciliationModule]
+    DisputeMod[DisputesModule]
+    SchoolMod[SchoolFeesModule]
+    NotifyMod[NotificationsModule]
+    ReportMod[ReportsModule]
+    DocMod[DocumentsModule]
+  end
+
+  subgraph infra_modules [Infrastructure Modules]
+    DbMod[DatabaseModule - TypeORM/Prisma]
+    CacheMod[CacheModule - Redis]
+    QueueMod[QueueModule - RabbitMQ]
+    StorageMod[StorageModule - S3]
+    TipsInt[TipsIntegrationModule]
+    CbsInt[CbsIntegrationModule]
+  end
+
+  Main --> Config & Health
+  Main --> cross_cutting
+  Main --> domain_modules
+  domain_modules --> infra_modules
+  PaymentMod --> TipsInt
+  SettlementMod --> CbsInt
+  QRMod --> CacheMod
+  AuthMod --> CacheMod
+  NotifyMod --> QueueMod
+  SettlementMod --> QueueMod
+  ReconMod --> QueueMod

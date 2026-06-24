@@ -1,0 +1,19 @@
+sequenceDiagram
+  participant Pay as PaymentsModule
+  participant Set as SettlementModule
+  participant Fin as Finance Officer
+  participant Q as RabbitMQ
+  participant W as Settlement Worker
+  participant CBS as Core Banking
+  participant Mer as Merchant
+
+  Pay->>Set: payments eligible at T+0 cut-off
+  Set->>Set: Build batch per merchant
+  Set->>Fin: Pending approval notification
+  Fin->>Set: Approve batch
+  Set->>Q: settlement.batch.ready
+  Q->>W: Process batch
+  W->>CBS: Credit settlement accounts
+  W->>W: Deduct MDR fees
+  W->>Set: Mark POSTED
+  Set->>Mer: Settlement advice notification

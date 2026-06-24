@@ -1,0 +1,143 @@
+flowchart TB
+  subgraph topRow [ ]
+    direction LR
+
+    subgraph m2 [MILESTONE 2 — Merchant Onboarding and QR Workflows]
+      direction TB
+      M2_Onboard[Merchant / School Onboarding + KYC]
+      M2_Merchant[Merchant Management]
+      M2_Status[Status: Active / Dormant / Suspended]
+      M2_Alias[Alias Merchant ID — Lipa Namba]
+      M2_Bulk[Bulk Student Upload API]
+      M2_StudentAlias[Student Alias Service]
+      M2_StudentTbl[(student_aliases)]
+      M2_SchoolSeq[(school_sequences)]
+      M2_QR[QR Management — Static and Dynamic TANQR]
+      M2_Onboard --> M2_Merchant --> M2_Status
+      M2_Merchant --> M2_Alias --> M2_QR
+      M2_Merchant --> M2_SchoolSeq
+      M2_Bulk --> M2_StudentAlias --> M2_StudentTbl
+      M2_StudentAlias --> M2_QR
+    end
+
+    subgraph mc [Maker-Checker — Segregation of Duties]
+      MC[Approval Workflow Engine]
+    end
+
+    subgraph m5top [MILESTONE 5 — Admin Portal Access]
+      direction TB
+      M5_Portal[Admin Portal — Next.js]
+      M5_Monitor[System Monitoring]
+      M5_Portal --> M5_Monitor
+    end
+  end
+
+  subgraph actors [External Actors]
+    direction LR
+    BankOps[Bank Staff / Acquirer Operations]
+    MerchantSchool[Merchant / School Administrator]
+    PayerParent[Payer / Parent]
+    FSPs[Issuer FSPs — Bank / MoMo / Third Party]
+  end
+
+  subgraph midRow [ ]
+    direction LR
+
+    subgraph m3 [MILESTONE 3 — TIPS/CBS Integration and Transactions]
+      direction TB
+      WSO2[WSO2 API Gateway]
+      M3_TIPS[TIPS Integration]
+      M3_CBS[CBS Integration]
+      M3_AliasJob[TIPS Student Alias Registration Job]
+      M3_Webhook[Callback / Webhook Handler]
+      M3_Route[Payment Routing — tag 62/05]
+      M3_Txn[Transaction Processing]
+      M3_Ledger[(Transaction Ledger)]
+      WSO2 --> M3_TIPS
+      WSO2 --> M3_CBS
+      M3_TIPS --> M3_AliasJob
+      M3_TIPS --> M3_Webhook --> M3_Route --> M3_Txn --> M3_Ledger
+    end
+
+    subgraph external [National and Bank Infrastructure]
+      direction TB
+      TIPS[TIPS Switch and Directory]
+      CBS[Core Banking System]
+      S3[Document and QR Storage]
+    end
+
+    subgraph m1 [MILESTONE 1 — Architecture and System Planning]
+      direction TB
+      M1_Auth[Authentication]
+      M1_RBAC[Authorization / RBAC Foundation]
+      M1_Users[User Management]
+      M1_Audit[Audit Logs]
+      M1_DB[(PostgreSQL Database)]
+      M1_Users --> M1_Auth --> M1_RBAC
+      M1_Audit -.-> M1_DB
+    end
+  end
+
+  subgraph bottomRow [ ]
+    direction LR
+
+    subgraph m4 [MILESTONE 4 — School Fees and Reconciliation]
+      direction TB
+      M4_School[School Fee Collection]
+      M4_Refs[Student / Invoice / Bill References]
+      M4_Track[Fee Payment Tracking and Allocation]
+      M4_Settle[Settlement Processing]
+      M4_Recon[Reconciliation Engine]
+      M4_Exc[Exception Handling and Matching]
+      M4_School --> M4_Refs --> M4_Track --> M4_Settle --> M4_Recon --> M4_Exc
+    end
+
+    subgraph m5bot [MILESTONE 5 — Reporting and Notifications]
+      direction TB
+      M5_Dash[Executive Dashboard]
+      M5_Report[Merchant / School / Transaction / Settlement Reports]
+      M5_Analytics[Operational Analytics]
+      M5_Notify[Notifications — SMS / Email]
+      M5_Dash --> M5_Report --> M5_Analytics
+    end
+  end
+
+  topRow ~~~ actors
+  actors ~~~ midRow
+  midRow ~~~ bottomRow
+
+  BankOps --> M5_Portal
+  MerchantSchool --> M5_Portal
+  M5_Portal --> M1_Auth
+  BankOps --> M2_Onboard
+  MerchantSchool --> M2_Merchant
+  MerchantSchool --> M4_School
+  MerchantSchool --> M2_Bulk
+  M2_Onboard -->|Submit for approval| MC
+  MC -->|Approve onboarding| M2_Merchant
+  M4_Settle -->|Submit batch| MC
+  MC -->|Approve settlement| M3_CBS
+  M2_Merchant --> M3_TIPS
+  M3_TIPS -->|Register merchant and student alias| TIPS
+  M2_QR --> S3
+  M4_Refs -->|Dynamic QR per invoice| M2_QR
+  PayerParent -->|Scan QR or Lipa Namba| FSPs
+  FSPs -->|Real-time payment| TIPS
+  TIPS -->|Payment notification| M3_Webhook
+  M4_Track --> M3_Txn
+  M3_Ledger --> M4_Settle
+  M3_CBS -->|Credit merchant account| CBS
+  M3_CBS -.->|Account validation| M2_Onboard
+  TIPS -->|Settlement report| M4_Recon
+  CBS -->|EOD account statement| M4_Recon
+  M3_Ledger --> M4_Recon
+  M4_Exc --> M5_Dash
+  M4_Recon --> M5_Report
+  M3_Txn --> M5_Notify
+  M3_Txn --> M5_Dash
+  M1_Audit -.-> M2_Merchant
+  M1_Audit -.-> M3_Txn
+  M1_Audit -.-> M4_Recon
+  M5_Report --> BankOps
+  M5_Notify --> MerchantSchool
+  M5_Notify --> PayerParent

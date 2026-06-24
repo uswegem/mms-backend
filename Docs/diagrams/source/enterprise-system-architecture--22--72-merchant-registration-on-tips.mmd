@@ -1,0 +1,18 @@
+sequenceDiagram
+  participant Ops as Acquirer Ops
+  participant MMS as MMS MerchantsModule
+  participant TR as TipsRegistrationModule
+  participant TIPS as TIPS Directory
+  participant DB as PostgreSQL
+
+  Ops->>MMS: Approve merchant KYC
+  MMS->>DB: status = APPROVED
+  MMS->>TR: RegisterMerchantCommand
+  TR->>TR: Build Acquirer ID 5-digit
+  TR->>TR: Assign Merchant ID <=15 digits
+  TR->>TR: Generate Lipa Namba alias + Damm
+  TR->>TIPS: POST register merchant
+  TIPS-->>TR: ACK + directory entry
+  TR->>DB: tips_registrations SUCCESS
+  TR-->>MMS: merchant.tips.registered event
+  MMS->>MMS: Trigger QR issuance

@@ -1,0 +1,61 @@
+erDiagram
+  MERCHANTS ||--|| SCHOOLS : is_school
+  MERCHANTS ||--o| SCHOOL_SEQUENCES : seq
+  MERCHANTS ||--o{ ACADEMIC_YEARS : years
+  ACADEMIC_YEARS ||--o{ TERMS : terms
+  MERCHANTS ||--o{ FEE_ITEMS : fees
+  MERCHANTS ||--o{ SCHOOL_CLASSES : classes
+  MERCHANTS ||--o{ STUDENTS : students
+  STUDENTS }o--o| SCHOOL_CLASSES : class
+  STUDENTS ||--o| STUDENT_ALIASES : permanent_lipa_namba
+  STUDENTS ||--o{ INVOICES : invoices
+  TERMS ||--o{ INVOICES : term
+  INVOICES ||--o{ INVOICE_LINES : lines
+  FEE_ITEMS ||--o{ INVOICE_LINES : item
+  INVOICES ||--o{ PAYMENT_ALLOCATIONS : paid
+  PAYMENTS ||--o{ PAYMENT_ALLOCATIONS : pays
+  INVOICES }o--o| QR_CODES : dynamic_qr_optional
+  STUDENTS ||--o| STUDENT_BALANCES : balance
+  STUDENT_ALIASES ||--o| QR_CODES : permanent_static_qr
+
+  SCHOOLS {
+    uuid merchant_id PK_FK
+    varchar registration_no
+  }
+
+  SCHOOL_SEQUENCES {
+    uuid merchant_id PK_FK
+    char school_seq_3
+    int last_student_seq
+  }
+
+  STUDENTS {
+    uuid id PK
+    varchar admission_no UK
+    bytea guardian_phone_enc
+  }
+
+  STUDENT_ALIASES {
+    uuid id PK
+    uuid student_id FK_UK
+    char alias_8digit UK
+    char internal_id_8digit UK
+    boolean tips_registered
+    boolean is_active
+  }
+
+  INVOICES {
+    uuid id PK
+    varchar bill_number UK
+    invoice_status status
+    numeric total_amount
+    numeric paid_amount
+    uuid qr_id FK
+  }
+
+  PAYMENT_ALLOCATIONS {
+    uuid id PK
+    uuid payment_id FK
+    uuid invoice_id FK
+    numeric amount
+  }

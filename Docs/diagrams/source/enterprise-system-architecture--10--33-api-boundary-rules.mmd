@@ -1,0 +1,14 @@
+flowchart LR
+  subgraph allowed [Allowed Dependencies]
+    UI[Next.js] -->|REST only| API[NestJS API]
+    API --> TIPS[TIPS Adapter]
+    API --> CBS[CBS Adapter]
+    Worker --> TIPS
+    Worker --> CBS
+  end
+
+  subgraph forbidden [Forbidden]
+    UI2[Next.js] -.->|NO direct| TIPS2[TIPS]
+    UI2 -.->|NO direct| CBS2[CBS]
+    UI2 -.->|NO business logic| DB[(PostgreSQL)]
+  end

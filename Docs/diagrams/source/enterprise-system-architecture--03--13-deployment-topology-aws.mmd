@@ -1,0 +1,40 @@
+flowchart TB
+  subgraph internet [Internet]
+    Users[Users]
+  end
+
+  subgraph aws_region [AWS Region - e.g. af-south-1]
+    subgraph vpc [VPC]
+      subgraph public_subnet [Public Subnets]
+        ALB2[ALB]
+        NAT[NAT Gateway]
+      end
+      subgraph private_app [Private Subnets - App]
+        ECS_API[ECS Fargate - NestJS API]
+        ECS_Worker[ECS Fargate - Workers]
+        ECS_WEB[ECS Fargate - Next.js]
+      end
+      subgraph private_data [Private Subnets - Data]
+        RDS[(RDS PostgreSQL Multi-AZ)]
+        ElastiCache[(ElastiCache Redis)]
+        AmazonMQ[(Amazon MQ - RabbitMQ)]
+      end
+    end
+    S3B[S3 Buckets]
+    SM[Secrets Manager]
+    CW[CloudWatch / X-Ray]
+  end
+
+  Users --> ALB2
+  ALB2 --> ECS_WEB
+  ALB2 --> ECS_API
+  ECS_WEB --> ECS_API
+  ECS_API --> RDS
+  ECS_API --> ElastiCache
+  ECS_API --> AmazonMQ
+  ECS_Worker --> AmazonMQ
+  ECS_Worker --> RDS
+  ECS_API --> S3B
+  ECS_API --> SM
+  ECS_Worker --> NAT
+  NAT --> TIPSCloud[TIPS / CBS endpoints]

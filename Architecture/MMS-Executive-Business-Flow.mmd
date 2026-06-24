@@ -1,0 +1,36 @@
+flowchart LR
+  subgraph acquire [ACQUIRE]
+    A1[Onboard Merchant / School]
+    A2[KYC + Maker-Checker Approval]
+    A3[CBS Account Validation]
+  end
+
+  subgraph register [REGISTER]
+    B1[TIPS Merchant Registration]
+    B2[School Alias + Static TANQR]
+    B3[Student Bulk or Single Upload]
+    B4[Permanent Student Lipa Namba]
+    B5[TIPS Student Alias Registration]
+  end
+
+  subgraph transact [TRANSACT]
+    C1[Payer scans QR / Lipa Namba]
+    C2[FSP routes via TIPS]
+    C3[MMS records payment + routes to student]
+  end
+
+  subgraph settle [SETTLE & MATCH]
+    D1[Settlement batch + approval]
+    D2[CBS credit to school account]
+    D3[Reconcile MMS / TIPS / CBS]
+  end
+
+  subgraph insight [REPORT]
+    E1[Dashboards & Analytics]
+    E2[Notifications to merchant / parent]
+  end
+
+  A1 --> A2 --> A3 --> B1 --> B2 --> B3 --> B4 --> B5
+  B5 --> C1 --> C2 --> C3
+  C3 --> D1 --> D2 --> D3
+  D3 --> E1 --> E2

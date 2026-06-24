@@ -1,0 +1,16 @@
+sequenceDiagram
+  participant Bursar as School Bursar
+  participant SF as SchoolFeesModule
+  participant DB as PostgreSQL
+  participant QR as TanqrModule
+  participant Parent as Parent
+
+  Bursar->>SF: Configure term fees
+  SF->>DB: fee_items academic_term
+  Bursar->>SF: Bulk generate invoices
+  SF->>DB: invoices bill_number UNIQUE
+  SF->>QR: GenerateDynamicQr per invoice
+  QR-->>SF: QR URL
+  SF->>DB: link qr_code to invoice
+  SF-->>Bursar: Print / share QR list
+  Bursar->>Parent: Distribute QR SMS

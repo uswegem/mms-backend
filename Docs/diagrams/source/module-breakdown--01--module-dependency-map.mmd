@@ -1,0 +1,54 @@
+flowchart TB
+  Auth[1 Authentication]
+  Authz[2 Authorization]
+  Config[16 Configuration]
+  Users[17 User Management]
+  Audit[15 Audit Logs]
+  MC[14 Maker Checker]
+
+  Auth --> Authz
+  Users --> Auth
+  Config --> Authz
+
+  Onboard[4 Merchant Onboarding]
+  Merchant[3 Merchant Management]
+  Alias[6 Alias Merchant ID]
+  QR[5 QR Management]
+  Tips[18 TIPS Integration]
+  CBS[19 CBS Integration]
+
+  Onboard --> Merchant
+  Merchant --> Tips
+  Merchant --> Alias
+  Merchant --> QR
+  Tips --> QR
+
+  Txn[8 Transactions]
+  Tips --> Txn
+  QR --> Txn
+  School[7 School Fee Collection]
+  School --> QR
+  School --> Txn
+
+  Settle[9 Settlement]
+  Txn --> Settle
+  CBS --> Settle
+
+  Recon[10 Reconciliation]
+  Settle --> Recon
+  Tips --> Recon
+  CBS --> Recon
+
+  Notify[13 Notifications]
+  Txn --> Notify
+  Settle --> Notify
+
+  Report[11 Reporting]
+  Dash[12 Dashboard]
+  Recon --> Report
+  Txn --> Dash
+
+  MC --> Onboard
+  MC --> Settle
+  Audit --> Auth & Merchant & Txn & Settle
+  Monitor[20 Monitoring]

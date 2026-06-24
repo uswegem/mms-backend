@@ -1,0 +1,25 @@
+flowchart TB
+  subgraph tanqr_engine [TANQR Engine Service]
+    Input[MerchantContext + TxnContext]
+    Builder[PayloadBuilder - EMV TLV]
+    Validator[SchemaValidator]
+    CRC[Crc16Calculator - ISO13239]
+    Renderer[QrImageRenderer]
+    Template[Annex2LayoutComposer]
+    Output[PayloadString + PNG/PDF]
+  end
+
+  Input --> Builder
+  Builder --> Validator
+  Validator --> CRC
+  CRC --> Renderer
+  Renderer --> Template
+  Template --> Output
+
+  subgraph data_refs [Reference Data]
+    MCC[MCC Master]
+    Postcode[TCRA Postcodes]
+    TipsIds[TIPS Acquirer Config]
+  end
+
+  Builder --> MCC & Postcode & TipsIds

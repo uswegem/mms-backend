@@ -1,0 +1,36 @@
+erDiagram
+  ACQUIRERS ||--o{ APPROVAL_POLICIES : policies
+  APPROVAL_TASKS ||--o| APPROVAL_DECISIONS : decision
+  USERS ||--o{ APPROVAL_TASKS : maker
+  USERS ||--o{ APPROVAL_DECISIONS : checker
+
+  ACQUIRERS ||--o{ TIPS_MESSAGE_LOG : tips_log
+  ACQUIRERS ||--o{ CBS_MESSAGE_LOG : cbs_log
+  MERCHANTS ||--o{ CBS_ACCOUNT_VERIFICATIONS : verify
+
+  ACQUIRERS ||--o{ AUDIT_LOGS : audit
+
+  APPROVAL_TASKS {
+    uuid id PK
+    approval_entity_type entity_type
+    uuid entity_id
+    approval_task_status status
+    uuid maker_id FK
+  }
+
+  AUDIT_LOGS {
+    uuid id PK
+    varchar action
+    varchar entity_type
+    uuid entity_id
+    jsonb old_values
+    jsonb new_values
+    timestamptz created_at
+  }
+
+  TIPS_MESSAGE_LOG {
+    uuid id PK
+    varchar direction
+    varchar correlation_id
+    jsonb payload_json
+  }

@@ -1,0 +1,14 @@
+sequenceDiagram
+  participant Payer as Payer USSD
+  participant Issuer as Issuer EMI
+  participant TIPS as TIPS Directory
+  participant MMS as MMS
+
+  Note over MMS: Alias 8-digit AAA-CCCC-S on QR Part C
+  Payer->>Issuer: Dial Lipa Namba enter 00112349
+  Issuer->>TIPS: Resolve alias to merchant ID26
+  TIPS->>Issuer: Merchant details
+  Payer->>Issuer: Enter amount confirm
+  Issuer->>TIPS: Process P2B
+  TIPS->>MMS: Payment notification
+  MMS->>MMS: Match merchant alias

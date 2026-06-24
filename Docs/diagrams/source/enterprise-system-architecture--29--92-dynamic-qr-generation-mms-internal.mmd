@@ -1,0 +1,19 @@
+sequenceDiagram
+  participant M as Merchant Portal
+  participant API as TanqrModule
+  participant Eng as TANQR Engine
+  participant DB as PostgreSQL
+  participant S3 as S3
+
+  M->>API: Request QR for invoice
+  API->>DB: Load merchant TIPS ID26 profile
+  API->>Eng: Build TLV payload
+  Eng->>Eng: Set ID26 tz.go.bot.tips
+  Eng->>Eng: Set amount ID54 currency 834
+  Eng->>Eng: Set bill ref ID62-01
+  Eng->>Eng: Compute CRC ID63
+  Eng-->>API: payload string
+  API->>Eng: Render Annex2 layout
+  API->>S3: Store PNG/PDF
+  API->>DB: qr_codes record
+  API-->>M: QR image URL + payload

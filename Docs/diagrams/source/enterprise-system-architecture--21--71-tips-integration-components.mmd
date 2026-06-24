@@ -1,0 +1,17 @@
+flowchart LR
+  subgraph mms_tips [MMS TIPS Integration]
+    RegAPI[Registration API Client]
+    PayHook[Payment Webhook Controller]
+    DirSync[Directory Sync Job]
+    RevAPI[Reversal API Client]
+    MsgLog[Message Audit Log]
+  end
+
+  TIPS[TIPS Platform]
+  Dir[TIPS Directory Service]
+
+  RegAPI --> TIPS
+  PayHook <-- TIPS
+  DirSync --> Dir
+  RevAPI --> TIPS
+  RegAPI & PayHook & RevAPI --> MsgLog

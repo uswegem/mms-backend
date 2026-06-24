@@ -1,0 +1,112 @@
+%%{init: {'flowchart': {'nodeSpacing': 50, 'rankSpacing': 60}, 'themeVariables': {'fontSize': '18px'}}}%%
+flowchart TB
+  classDef milestone fill:#FFF176,stroke:#F57F17,stroke-width:3px,color:#000
+  classDef module fill:#E3F2FD,stroke:#1565C0,stroke-width:2px,color:#000
+  classDef store fill:#E8F5E9,stroke:#2E7D32,stroke-width:2px,color:#000
+  classDef external fill:#F3E5F5,stroke:#6A1B9A,stroke-width:2px,color:#000
+  classDef actor fill:#FFFFFF,stroke:#546E7A,stroke-width:2px,color:#000
+
+  subgraph ACTORS["EXTERNAL ACTORS"]
+    direction LR
+    ACT1["Bank Staff"]:::actor
+    ACT2["School Admin"]:::actor
+    ACT3["Parent / Payer"]:::actor
+    ACT4["Issuer FSPs"]:::actor
+  end
+
+  subgraph M1["MILESTONE 1 — Platform Foundation"]
+    direction TB
+    M1A["Auth + RBAC + Users"]:::module
+    M1B["Audit Logs + Config"]:::module
+    M1C[("PostgreSQL")]:::store
+    M1A --> M1C
+    M1B --> M1C
+  end
+
+  subgraph M2["MILESTONE 2 — Onboarding & QR"]
+    direction TB
+    M2A["Merchant / School Onboarding"]:::module
+    M2B["Merchant Management + Status"]:::module
+    M2C["merchant_aliases — school adhoc"]:::module
+    M2D["Student Alias Service"]:::module
+    M2E["Bulk Student Upload API"]:::module
+    M2F["QR Management — TANQR"]:::module
+    M2G[("student_aliases")]:::store
+    M2H[("school_sequences")]:::store
+    M2A --> M2B --> M2C
+    M2B --> M2D
+    M2E --> M2D
+    M2D --> M2G
+    M2D --> M2H
+    M2D --> M2F
+  end
+
+  subgraph MC["MAKER-CHECKER"]
+    MC1["Approval Workflow Engine"]:::module
+  end
+
+  subgraph M3["MILESTONE 3 — TIPS / CBS / Transactions"]
+    direction TB
+    M3A["TIPS Integration"]:::module
+    M3B["CBS Integration"]:::module
+    M3C["TIPS Alias Registration Job"]:::module
+    M3D["Webhook + Payment Routing"]:::module
+    M3E["Transaction Processing"]:::module
+    M3F[("Transaction Ledger")]:::store
+    M3A --> M3C
+    M3A --> M3D --> M3E --> M3F
+  end
+
+  subgraph M4["MILESTONE 4 — School Fees & Reconciliation"]
+    direction TB
+    M4A["School Fee Collection"]:::module
+    M4B["Student Registry"]:::module
+    M4C["Invoice + Allocation Engine"]:::module
+    M4D["Settlement Processing"]:::module
+    M4E["Reconciliation Engine"]:::module
+    M4A --> M4B --> M4C --> M4D --> M4E
+  end
+
+  subgraph M5["MILESTONE 5 — Reporting & Admin"]
+    direction TB
+    M5A["Admin / Merchant Portal"]:::module
+    M5B["Dashboards + Reports"]:::module
+    M5C["Notifications — SMS / Email"]:::module
+    M5A --> M5B --> M5C
+  end
+
+  subgraph EXT["NATIONAL & BANK INFRASTRUCTURE"]
+    direction LR
+    EXT1["TIPS Switch"]:::external
+    EXT2["Core Banking System"]:::external
+    EXT3["QR / Document Storage"]:::external
+  end
+
+  ACT1 & ACT2 --> M5A
+  ACT2 --> M2E
+  ACT2 --> M4A
+  ACT1 --> M2A
+  ACT3 --> ACT4
+
+  M2A -->|submit| MC1
+  MC1 -->|approve| M2B
+  M4D -->|submit batch| MC1
+  MC1 -->|approve| M3B
+
+  M2B --> M3A
+  M2D --> M3C
+  M3A <-->|school + student aliases| EXT1
+  M3B <-->|account validation / credit| EXT2
+  M2F --> EXT3
+
+  ACT4 -->|payment| EXT1
+  EXT1 -->|webhook tag 62/05| M3D
+  EXT1 -->|credit school| EXT2
+  M3D -->|lookup| M2G
+  M3E --> M4C
+  M3F --> M4D
+  M4E --> M5B
+  M3E --> M5C
+  M5C --> ACT2 & ACT3
+
+  class M1,M2,MC,M3,M4,M5 milestone

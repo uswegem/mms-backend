@@ -1,0 +1,8 @@
+flowchart TD
+  Start[Payment scenario] --> Q1{Fixed amount known?}
+  Q1 -->|No| Static[Static QR POI 11]
+  Q1 -->|Yes| Dynamic[Dynamic QR POI 12]
+  Static --> S1[Payer enters amount]
+  Dynamic --> D1[Amount in ID 54]
+  S1 & D1 --> Scan[Payer scans via issuer app]
+  Scan --> TIPSFlow[TIPS payment flow]

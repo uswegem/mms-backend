@@ -1,0 +1,20 @@
+flowchart LR
+  subgraph hot [Hot - Redis TTL]
+    S1[Session tokens]
+    S2[Merchant profile cache]
+    S3[QR template cache]
+    S4[Rate limit counters]
+  end
+
+  subgraph warm [Warm - PostgreSQL]
+    W1[Active merchants]
+    W2[Today's payments]
+    W3[Open settlement batches]
+  end
+
+  subgraph cold [Cold - S3 / Archive]
+    C1[KYC scans]
+    C2[QR print PDFs]
+    C3[Recon files > 1yr]
+    C4[Archived partitions]
+  end

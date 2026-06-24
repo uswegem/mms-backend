@@ -1,0 +1,24 @@
+flowchart TB
+  subgraph oltp [OLTP - Primary]
+    Primary[(PostgreSQL Primary)]
+  end
+
+  subgraph olap [OLAP / Reporting]
+    Replica[(Read Replica)]
+    Meta[Metabase]
+  end
+
+  subgraph cache [Cache]
+    Redis[(Redis)]
+  end
+
+  subgraph object [Object Store]
+    S3[(S3 - KYC QR exports)]
+  end
+
+  App[NestJS API] -->|read/write| Primary
+  Workers[Workers] -->|write| Primary
+  App -->|hot reads| Redis
+  Replica -->|streaming replication| Primary
+  Meta -->|read-only user| Replica
+  App -->|metadata only| S3

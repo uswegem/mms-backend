@@ -1,0 +1,27 @@
+flowchart TB
+  subgraph inputs [Inputs]
+    P1[Successful payments]
+    F1[Fee rules MDR TIPS charges]
+    C1[Settlement calendar]
+  end
+
+  subgraph engine [Settlement Engine]
+    Agg[Aggregator by merchant]
+    Fee[Fee calculator]
+    Batch[Batch builder]
+    Approve[Maker-checker approval]
+  end
+
+  subgraph outputs [Outputs]
+    CBSW[CBS posting worker]
+    Stmt[Merchant statements]
+    GL[GL entries]
+  end
+
+  P1 --> Agg
+  F1 --> Fee
+  C1 --> Batch
+  Agg --> Fee --> Batch --> Approve
+  Approve --> CBSW
+  Approve --> Stmt
+  CBSW --> GL

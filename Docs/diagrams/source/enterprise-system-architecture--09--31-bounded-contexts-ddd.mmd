@@ -1,0 +1,56 @@
+flowchart TB
+  subgraph bc_identity [BC: Identity & Access]
+    I1[Users Roles Permissions]
+    I2[JWT Sessions MFA]
+  end
+
+  subgraph bc_merchant [BC: Merchant Acquiring]
+    M1[Merchant Store Terminal]
+    M2[KYC Risk Limits]
+    M3[TIPS Registration]
+  end
+
+  subgraph bc_qr [BC: TANQR & Lipa Namba]
+    Q1[QR Payload CRC]
+    Q2[QR Render Print]
+    Q3[Alias Damm]
+  end
+
+  subgraph bc_payment [BC: Payments]
+    P1[Payment Events]
+    P2[Matching Idempotency]
+    P3[Refunds Reversals]
+  end
+
+  subgraph bc_settlement [BC: Settlement & Finance]
+    S1[Settlement Batches]
+    S2[Fee Rules MDR]
+    S3[CBS Posting]
+  end
+
+  subgraph bc_recon [BC: Reconciliation]
+    R1[3-Way Match]
+    R2[Exceptions]
+  end
+
+  subgraph bc_school [BC: School Fees]
+    SF1[Students Invoices]
+    SF2[Fee Allocation]
+  end
+
+  subgraph bc_notify [BC: Notifications]
+    N1[SMS Email Push]
+  end
+
+  subgraph bc_report [BC: Reporting]
+    RP1[Reports Schedules]
+  end
+
+  bc_merchant -->|merchantId| bc_qr
+  bc_merchant -->|merchantId| bc_payment
+  bc_school -->|extends| bc_merchant
+  bc_school -->|invoiceRef| bc_qr
+  bc_payment -->|triggers| bc_settlement
+  bc_payment -->|triggers| bc_notify
+  bc_settlement -->|feeds| bc_recon
+  bc_payment -->|feeds| bc_recon

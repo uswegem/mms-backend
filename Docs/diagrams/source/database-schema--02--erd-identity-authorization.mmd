@@ -1,0 +1,48 @@
+erDiagram
+  ACQUIRERS ||--o{ USERS : has
+  USERS ||--|| USER_PROFILES : profile
+  USERS ||--|| AUTH_CREDENTIALS : auth
+  USERS ||--o{ REFRESH_TOKENS : sessions
+  USERS ||--o{ USER_ROLES : roles
+  ROLES ||--o{ ROLE_PERMISSIONS : perms
+  PERMISSIONS ||--o{ ROLE_PERMISSIONS : on
+  ACQUIRERS ||--o{ API_CLIENTS : integrators
+  USERS ||--o{ USER_INVITATIONS : invites
+
+  USERS {
+    uuid id PK
+    uuid acquirer_id FK
+    uuid merchant_id FK
+    citext email UK
+    user_status status
+    timestamptz created_at
+    timestamptz deleted_at
+  }
+
+  AUTH_CREDENTIALS {
+    uuid user_id PK_FK
+    varchar password_hash
+    boolean mfa_enabled
+    timestamptz lockout_until
+  }
+
+  REFRESH_TOKENS {
+    uuid id PK
+    uuid user_id FK
+    varchar token_hash
+    uuid family_id
+    timestamptz expires_at
+    timestamptz revoked_at
+  }
+
+  ROLES {
+    uuid id PK
+    varchar code UK
+    boolean is_system
+  }
+
+  PERMISSIONS {
+    uuid id PK
+    varchar code UK
+    varchar module
+  }

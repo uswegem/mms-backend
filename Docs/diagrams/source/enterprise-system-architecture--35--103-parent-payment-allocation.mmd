@@ -1,0 +1,23 @@
+sequenceDiagram
+  participant Parent as Parent
+  participant Issuer as Mobile App / USSD
+  participant TIPS as TIPS
+  participant MMS as MMS Webhook
+  participant Route as Routing Engine
+  participant SF as SchoolFeesModule
+  participant DB as PostgreSQL
+
+  Note over Parent,DB: Parent uses permanent student Lipa Namba 78000028 for entire course
+
+  Parent->>Issuer: Enter Lipa Namba or scan permanent static QR
+  Issuer->>TIPS: Pay amount
+  TIPS->>TIPS: Resolve alias to school settlement account
+  TIPS->>MMS: Payment webhook with tag 62/05 internal ID 00100014
+  MMS->>Route: Validate Damm checksum on internal ID
+  Route->>DB: Lookup student_aliases by internal_id_8digit
+  Route->>SF: AllocatePayment student_id amount
+  SF->>DB: payment_allocation oldest invoice first
+  SF->>DB: invoice status PAID or PARTIAL
+  SF->>DB: student_balances outstanding update
+  MMS->>Parent: SMS amount received and balance
+  MMS->>DB: audit trail

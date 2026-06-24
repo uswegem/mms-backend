@@ -1,0 +1,15 @@
+stateDiagram-v2
+  [*] --> Received
+  Received --> Validating: parse message
+  Validating --> Accepted: schema OK
+  Validating --> Rejected: invalid
+  Accepted --> Processing: business rules
+  Processing --> Completed: success
+  Processing --> Retry: transient error
+  Retry --> Processing: backoff
+  Retry --> DeadLetter: max retries
+  Processing --> ManualReview: business exception
+  DeadLetter --> ManualReview: ops intervention
+  Completed --> [*]
+  Rejected --> [*]
+  ManualReview --> [*]

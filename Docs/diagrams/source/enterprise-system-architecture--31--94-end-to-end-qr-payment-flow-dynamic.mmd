@@ -1,0 +1,16 @@
+sequenceDiagram
+  participant MMS as MMS
+  participant Merchant as Merchant
+  participant Payer as Payer
+  participant Issuer as Issuer App
+  participant TIPS as TIPS
+
+  MMS->>MMS: Generate dynamic QR per invoice
+  Merchant->>Payer: Show QR checkout
+  Payer->>Issuer: Scan QR
+  Issuer->>Issuer: Amount pre-filled from ID54
+  Payer->>Issuer: Confirm payment
+  Issuer->>TIPS: Payment initiation
+  TIPS->>MMS: Webhook with bill reference
+  MMS->>MMS: Match invoice mark PAID
+  MMS->>Merchant: Payment confirmation

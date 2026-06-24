@@ -1,0 +1,1726 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>MMS Flow Diagrams — 54 diagrams</title>
+  <script src="https://cdn.jsdelivr.net/npm/mermaid@11/dist/mermaid.min.js"></script>
+  <style>
+    * { box-sizing: border-box; }
+    body { font-family: Inter, system-ui, sans-serif; margin: 0; background: #f8fafc; color: #0f172a; }
+    header { background: #0f2942; color: #fff; padding: 1.5rem 2rem; position: sticky; top: 0; z-index: 10; }
+    header h1 { margin: 0 0 0.25rem; font-size: 1.25rem; }
+    header p { margin: 0; font-size: 0.85rem; opacity: 0.8; }
+    nav { background: #fff; border-bottom: 1px solid #e2e8f0; padding: 0.75rem 2rem; display: flex; gap: 0.5rem; flex-wrap: wrap; position: sticky; top: 72px; z-index: 9; }
+    nav button { padding: 0.4rem 0.75rem; border: 1px solid #e2e8f0; background: #fff; border-radius: 6px; cursor: pointer; font-size: 0.75rem; }
+    nav button:hover { background: #f1f5f9; }
+    main { max-width: 1200px; margin: 0 auto; padding: 2rem; }
+    .diagram-page { background: #fff; border: 1px solid #e2e8f0; border-radius: 12px; padding: 1.5rem 2rem; margin-bottom: 2rem; page-break-inside: avoid; }
+    .diagram-page h2 { margin: 0 0 1rem; font-size: 1.1rem; }
+    .meta { font-size: 0.7rem; color: #64748b; text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 0.5rem; }
+    .mermaid { display: flex; justify-content: center; }
+    @media print {
+      header nav { display: none; }
+      .diagram-page { page-break-after: always; border: none; box-shadow: none; }
+    }
+  </style>
+</head>
+<body>
+  <header>
+    <h1>MMS Platform — Flow Diagrams</h1>
+    <p>54 architecture &amp; workflow diagrams · TANQR / TIPS · Tanzania</p>
+  </header>
+  <nav>
+    <button onclick="window.print()">🖨 Print / Save as PDF</button>
+    <button onclick="document.getElementById('workflow').scrollIntoView()">Workflow flows (§7–12)</button>
+    <button onclick="document.getElementById('diagram-1').scrollIntoView()">Top</button>
+  </nav>
+  <main>
+    <div id="workflow"></div>
+    
+    <section class="diagram-page" id="diagram-1">
+      <div class="meta">Architecture/Enterprise-System-Architecture.md</div>
+      <h2>1. 1.1 Context diagram (enterprise view)</h2>
+      <pre class="mermaid">flowchart TB
+  subgraph external_users [External Users]
+    Payer[Payer / Parent]
+    MerchantUser[Merchant / School Bursar]
+    AcquirerOps[Acquirer Operations]
+    Compliance[Compliance / Risk]
+  end
+
+  subgraph mms_platform [MMS Platform - Acquirer]
+    Portal[Next.js Portals]
+    API[NestJS API Layer]
+    Workers[Background Workers]
+    Data[(PostgreSQL)]
+    Cache[(Redis)]
+    Queue[RabbitMQ]
+    Files[AWS S3]
+  end
+
+  subgraph national [National Payment Infrastructure]
+    TIPS[TIPS Switch]
+    Issuers[Issuer Banks / EMIs]
+  end
+
+  subgraph bank_internal [Bank Internal Systems]
+    CBS[Core Banking System]
+    AML[AML / Screening]
+    GL[General Ledger]
+    SMS[SMS Gateway]
+  end
+
+  subgraph optional [Optional / Future]
+    GePG[GePG]
+    Meta[Metabase BI]
+  end
+
+  Payer --&gt;|Scan QR / Lipa Namba| Issuers
+  Issuers --&gt; TIPS
+  TIPS --&gt;|Payment notify / settlement| API
+  MerchantUser --&gt; Portal
+  AcquirerOps --&gt; Portal
+  Compliance --&gt; Portal
+  Portal --&gt;|HTTPS JWT| API
+  API --&gt; Data
+  API --&gt; Cache
+  API --&gt; Queue
+  API --&gt; Files
+  Workers --&gt; Queue
+  Workers --&gt; Data
+  API --&gt; CBS
+  API --&gt; AML
+  Workers --&gt; SMS
+  Workers --&gt; CBS
+  Workers --&gt; GL
+  Meta --&gt;|Read replica| Data
+  API -.-&gt; GePG
+  TIPS --&gt; Issuers</pre>
+    </section>
+
+    <section class="diagram-page" id="diagram-2">
+      <div class="meta">Architecture/Enterprise-System-Architecture.md</div>
+      <h2>2. 1.2 Layered architecture</h2>
+      <pre class="mermaid">flowchart TB
+  subgraph presentation [Presentation Layer]
+    AdminUI[Acquirer Admin Portal]
+    MerchantUI[Merchant Portal]
+    SchoolUI[School Fees Portal]
+    PublicAPI[Developer API Docs]
+  end
+
+  subgraph gateway [Edge &amp; Gateway Layer]
+    WAF[AWS WAF]
+    ALB[Application Load Balancer]
+    CDN[CloudFront - static assets]
+    APIGW[API Gateway / BFF optional]
+  end
+
+  subgraph application [Application Layer - NestJS]
+    AuthSvc[Identity &amp; Auth]
+    MerchantSvc[Merchant Domain]
+    QREngine[TANQR Engine]
+    PaymentSvc[Payment Ingestion]
+    SettlementSvc[Settlement]
+    ReconSvc[Reconciliation]
+    SchoolSvc[School Fees]
+    NotifySvc[Notifications]
+    ReportSvc[Reporting API]
+  end
+
+  subgraph integration [Integration Layer]
+    TIPSAdapter[TIPS Adapter]
+    CBSAdapter[CBS Adapter]
+    ChannelAdapters[SMS / Email / GePG]
+  end
+
+  subgraph data_layer [Data Layer]
+    PG[(PostgreSQL Primary)]
+    PGRO[(Read Replica)]
+    Redis[(Redis)]
+    S3[(S3)]
+  end
+
+  subgraph messaging [Messaging Layer]
+    RMQ[RabbitMQ]
+  end
+
+  AdminUI &amp; MerchantUI &amp; SchoolUI --&gt; CDN
+  AdminUI &amp; MerchantUI &amp; SchoolUI --&gt; ALB
+  ALB --&gt; WAF
+  WAF --&gt; APIGW
+  APIGW --&gt; AuthSvc &amp; MerchantSvc &amp; QREngine &amp; PaymentSvc &amp; SchoolSvc &amp; ReportSvc
+  PaymentSvc --&gt; TIPSAdapter
+  SettlementSvc --&gt; CBSAdapter
+  MerchantSvc --&gt; QREngine
+  SchoolSvc --&gt; QREngine
+  AuthSvc &amp; MerchantSvc &amp; PaymentSvc --&gt; PG
+  AuthSvc --&gt; Redis
+  PaymentSvc &amp; SettlementSvc &amp; NotifySvc --&gt; RMQ
+  NotifySvc --&gt; ChannelAdapters
+  TIPSAdapter --&gt; TIPSExt[TIPS]
+  CBSAdapter --&gt; CBSExt[CBS]
+  ReportSvc --&gt; PGRO
+  MerchantSvc --&gt; S3
+  QREngine --&gt; S3</pre>
+    </section>
+
+    <section class="diagram-page" id="diagram-3">
+      <div class="meta">Architecture/Enterprise-System-Architecture.md</div>
+      <h2>3. 1.3 Deployment topology (AWS)</h2>
+      <pre class="mermaid">flowchart TB
+  subgraph internet [Internet]
+    Users[Users]
+  end
+
+  subgraph aws_region [AWS Region - e.g. af-south-1]
+    subgraph vpc [VPC]
+      subgraph public_subnet [Public Subnets]
+        ALB2[ALB]
+        NAT[NAT Gateway]
+      end
+      subgraph private_app [Private Subnets - App]
+        ECS_API[ECS Fargate - NestJS API]
+        ECS_Worker[ECS Fargate - Workers]
+        ECS_WEB[ECS Fargate - Next.js]
+      end
+      subgraph private_data [Private Subnets - Data]
+        RDS[(RDS PostgreSQL Multi-AZ)]
+        ElastiCache[(ElastiCache Redis)]
+        AmazonMQ[(Amazon MQ - RabbitMQ)]
+      end
+    end
+    S3B[S3 Buckets]
+    SM[Secrets Manager]
+    CW[CloudWatch / X-Ray]
+  end
+
+  Users --&gt; ALB2
+  ALB2 --&gt; ECS_WEB
+  ALB2 --&gt; ECS_API
+  ECS_WEB --&gt; ECS_API
+  ECS_API --&gt; RDS
+  ECS_API --&gt; ElastiCache
+  ECS_API --&gt; AmazonMQ
+  ECS_Worker --&gt; AmazonMQ
+  ECS_Worker --&gt; RDS
+  ECS_API --&gt; S3B
+  ECS_API --&gt; SM
+  ECS_Worker --&gt; NAT
+  NAT --&gt; TIPSCloud[TIPS / CBS endpoints]</pre>
+    </section>
+
+    <section class="diagram-page" id="diagram-4">
+      <div class="meta">Architecture/Enterprise-System-Architecture.md</div>
+      <h2>4. 2.1 NestJS modular decomposition</h2>
+      <pre class="mermaid">flowchart TB
+  subgraph bootstrap [NestJS Application]
+    Main[main.ts bootstrap]
+    Config[ConfigModule]
+    Health[HealthModule]
+  end
+
+  subgraph cross_cutting [Cross-Cutting]
+    Logger[LoggingModule - structured JSON]
+    Audit[AuditModule]
+    Idempotency[IdempotencyModule]
+    Validation[ValidationPipe / class-validator]
+  end
+
+  subgraph domain_modules [Domain Modules]
+    AuthMod[AuthModule]
+    UserMod[UsersModule]
+    MerchantMod[MerchantsModule]
+    TipsRegMod[TipsRegistrationModule]
+    QRMod[TanqrModule]
+    AliasMod[LipaNambaModule]
+    PaymentMod[PaymentsModule]
+    SettlementMod[SettlementModule]
+    ReconMod[ReconciliationModule]
+    DisputeMod[DisputesModule]
+    SchoolMod[SchoolFeesModule]
+    NotifyMod[NotificationsModule]
+    ReportMod[ReportsModule]
+    DocMod[DocumentsModule]
+  end
+
+  subgraph infra_modules [Infrastructure Modules]
+    DbMod[DatabaseModule - TypeORM/Prisma]
+    CacheMod[CacheModule - Redis]
+    QueueMod[QueueModule - RabbitMQ]
+    StorageMod[StorageModule - S3]
+    TipsInt[TipsIntegrationModule]
+    CbsInt[CbsIntegrationModule]
+  end
+
+  Main --&gt; Config &amp; Health
+  Main --&gt; cross_cutting
+  Main --&gt; domain_modules
+  domain_modules --&gt; infra_modules
+  PaymentMod --&gt; TipsInt
+  SettlementMod --&gt; CbsInt
+  QRMod --&gt; CacheMod
+  AuthMod --&gt; CacheMod
+  NotifyMod --&gt; QueueMod
+  SettlementMod --&gt; QueueMod
+  ReconMod --&gt; QueueMod</pre>
+    </section>
+
+    <section class="diagram-page" id="diagram-5">
+      <div class="meta">Architecture/Enterprise-System-Architecture.md</div>
+      <h2>5. 2.2 Next.js application structure</h2>
+      <pre class="mermaid">flowchart LR
+  subgraph next_app [Next.js Frontend]
+    subgraph routes [App Router]
+      AuthR[/login /logout]
+      AdminR[/admin/*]
+      MerchantR[/merchant/*]
+      SchoolR[/school/*]
+      ReportsR[/reports/*]
+    end
+    subgraph client [Client Layer]
+      APIClient[API Client - axios/fetch]
+      AuthCtx[Auth Context - tokens]
+      RQ[React Query cache]
+    end
+    subgraph ui [UI Components]
+      Layout[Layouts / RBAC guards]
+      QRView[QR Preview / Download]
+      Dash[Dashboards]
+    end
+  end
+
+  AuthR --&gt; AuthCtx
+  AdminR &amp; MerchantR &amp; SchoolR --&gt; Layout
+  Layout --&gt; APIClient
+  APIClient --&gt;|REST + JWT| NestAPI[NestJS API]
+  QRView --&gt; APIClient
+  Dash --&gt; RQ
+  RQ --&gt; APIClient</pre>
+    </section>
+
+    <section class="diagram-page" id="diagram-6">
+      <div class="meta">Architecture/Enterprise-System-Architecture.md</div>
+      <h2>6. 2.3 Worker processes (async)</h2>
+      <pre class="mermaid">flowchart LR
+  subgraph producers [API Producers]
+    API1[NestJS API]
+  end
+
+  subgraph exchanges [RabbitMQ Exchanges]
+    EX_PAY[payments.exchange]
+    EX_SET[settlement.exchange]
+    EX_NOT[notifications.exchange]
+    EX_RECON[reconciliation.exchange]
+  end
+
+  subgraph queues [Queues]
+    Q_PAY[payments.notify.q]
+    Q_SET[settlement.batch.q]
+    Q_SMS[sms.send.q]
+    Q_EMAIL[email.send.q]
+    Q_RECON[recon.run.q]
+    Q_DLQ[dead.letter.q]
+  end
+
+  subgraph consumers [Worker Consumers]
+    W1[PaymentNotifyWorker]
+    W2[SettlementBatchWorker]
+    W3[NotificationWorker]
+    W4[ReconciliationWorker]
+  end
+
+  API1 --&gt; EX_PAY &amp; EX_SET &amp; EX_NOT &amp; EX_RECON
+  EX_PAY --&gt; Q_PAY --&gt; W1
+  EX_SET --&gt; Q_SET --&gt; W2
+  EX_NOT --&gt; Q_SMS &amp; Q_EMAIL --&gt; W3
+  EX_RECON --&gt; Q_RECON --&gt; W4
+  Q_PAY &amp; Q_SET &amp; Q_SMS &amp; Q_EMAIL &amp; Q_RECON -.-&gt;|fail| Q_DLQ</pre>
+    </section>
+
+    <section class="diagram-page" id="diagram-7">
+      <div class="meta">Architecture/Enterprise-System-Architecture.md</div>
+      <h2>7. 2.4 TANQR engine (internal component design)</h2>
+      <pre class="mermaid">flowchart TB
+  subgraph tanqr_engine [TANQR Engine Service]
+    Input[MerchantContext + TxnContext]
+    Builder[PayloadBuilder - EMV TLV]
+    Validator[SchemaValidator]
+    CRC[Crc16Calculator - ISO13239]
+    Renderer[QrImageRenderer]
+    Template[Annex2LayoutComposer]
+    Output[PayloadString + PNG/PDF]
+  end
+
+  Input --&gt; Builder
+  Builder --&gt; Validator
+  Validator --&gt; CRC
+  CRC --&gt; Renderer
+  Renderer --&gt; Template
+  Template --&gt; Output
+
+  subgraph data_refs [Reference Data]
+    MCC[MCC Master]
+    Postcode[TCRA Postcodes]
+    TipsIds[TIPS Acquirer Config]
+  end
+
+  Builder --&gt; MCC &amp; Postcode &amp; TipsIds</pre>
+    </section>
+
+    <section class="diagram-page" id="diagram-8">
+      <div class="meta">Architecture/Enterprise-System-Architecture.md</div>
+      <h2>8. 2.5 Request path (synchronous API)</h2>
+      <pre class="mermaid">sequenceDiagram
+  participant U as User Browser
+  participant N as Next.js
+  participant A as NestJS API
+  participant R as Redis
+  participant P as PostgreSQL
+
+  U-&gt;&gt;N: Page action
+  N-&gt;&gt;A: HTTPS + Bearer JWT
+  A-&gt;&gt;A: JWT validate + RBAC guard
+  A-&gt;&gt;R: Optional cache read
+  alt cache miss
+    A-&gt;&gt;P: Query / transaction
+    P--&gt;&gt;A: Result
+    A-&gt;&gt;R: Cache write
+  end
+  A--&gt;&gt;N: JSON response
+  N--&gt;&gt;U: Render UI</pre>
+    </section>
+
+    <section class="diagram-page" id="diagram-9">
+      <div class="meta">Architecture/Enterprise-System-Architecture.md</div>
+      <h2>9. 3.1 Bounded contexts (DDD)</h2>
+      <pre class="mermaid">flowchart TB
+  subgraph bc_identity [BC: Identity &amp; Access]
+    I1[Users Roles Permissions]
+    I2[JWT Sessions MFA]
+  end
+
+  subgraph bc_merchant [BC: Merchant Acquiring]
+    M1[Merchant Store Terminal]
+    M2[KYC Risk Limits]
+    M3[TIPS Registration]
+  end
+
+  subgraph bc_qr [BC: TANQR &amp; Lipa Namba]
+    Q1[QR Payload CRC]
+    Q2[QR Render Print]
+    Q3[Alias Damm]
+  end
+
+  subgraph bc_payment [BC: Payments]
+    P1[Payment Events]
+    P2[Matching Idempotency]
+    P3[Refunds Reversals]
+  end
+
+  subgraph bc_settlement [BC: Settlement &amp; Finance]
+    S1[Settlement Batches]
+    S2[Fee Rules MDR]
+    S3[CBS Posting]
+  end
+
+  subgraph bc_recon [BC: Reconciliation]
+    R1[3-Way Match]
+    R2[Exceptions]
+  end
+
+  subgraph bc_school [BC: School Fees]
+    SF1[Students Invoices]
+    SF2[Fee Allocation]
+  end
+
+  subgraph bc_notify [BC: Notifications]
+    N1[SMS Email Push]
+  end
+
+  subgraph bc_report [BC: Reporting]
+    RP1[Reports Schedules]
+  end
+
+  bc_merchant --&gt;|merchantId| bc_qr
+  bc_merchant --&gt;|merchantId| bc_payment
+  bc_school --&gt;|extends| bc_merchant
+  bc_school --&gt;|invoiceRef| bc_qr
+  bc_payment --&gt;|triggers| bc_settlement
+  bc_payment --&gt;|triggers| bc_notify
+  bc_settlement --&gt;|feeds| bc_recon
+  bc_payment --&gt;|feeds| bc_recon</pre>
+    </section>
+
+    <section class="diagram-page" id="diagram-10">
+      <div class="meta">Architecture/Enterprise-System-Architecture.md</div>
+      <h2>10. 3.3 API boundary rules</h2>
+      <pre class="mermaid">flowchart LR
+  subgraph allowed [Allowed Dependencies]
+    UI[Next.js] --&gt;|REST only| API[NestJS API]
+    API --&gt; TIPS[TIPS Adapter]
+    API --&gt; CBS[CBS Adapter]
+    Worker --&gt; TIPS
+    Worker --&gt; CBS
+  end
+
+  subgraph forbidden [Forbidden]
+    UI2[Next.js] -.-&gt;|NO direct| TIPS2[TIPS]
+    UI2 -.-&gt;|NO direct| CBS2[CBS]
+    UI2 -.-&gt;|NO business logic| DB[(PostgreSQL)]
+  end</pre>
+    </section>
+
+    <section class="diagram-page" id="diagram-11">
+      <div class="meta">Architecture/Enterprise-System-Architecture.md</div>
+      <h2>11. 4.1 Database topology</h2>
+      <pre class="mermaid">flowchart TB
+  subgraph oltp [OLTP - Primary]
+    Primary[(PostgreSQL Primary)]
+  end
+
+  subgraph olap [OLAP / Reporting]
+    Replica[(Read Replica)]
+    Meta[Metabase]
+  end
+
+  subgraph cache [Cache]
+    Redis[(Redis)]
+  end
+
+  subgraph object [Object Store]
+    S3[(S3 - KYC QR exports)]
+  end
+
+  App[NestJS API] --&gt;|read/write| Primary
+  Workers[Workers] --&gt;|write| Primary
+  App --&gt;|hot reads| Redis
+  Replica --&gt;|streaming replication| Primary
+  Meta --&gt;|read-only user| Replica
+  App --&gt;|metadata only| S3</pre>
+    </section>
+
+    <section class="diagram-page" id="diagram-12">
+      <div class="meta">Architecture/Enterprise-System-Architecture.md</div>
+      <h2>12. 4.2 Schema domains (logical ERD overview)</h2>
+      <pre class="mermaid">erDiagram
+  ACQUIRER ||--o{ MERCHANT : owns
+  MERCHANT ||--o{ STORE : has
+  STORE ||--o{ TERMINAL : has
+  MERCHANT ||--o{ MERCHANT_KYC : has
+  MERCHANT ||--|| TIPS_REGISTRATION : has
+  MERCHANT ||--o{ QR_CODE : has
+  MERCHANT ||--o| MERCHANT_ALIAS : has
+  MERCHANT ||--o{ SETTLEMENT_ACCOUNT : has
+
+  PAYMENT ||--o{ PAYMENT_EVENT : logs
+  PAYMENT }o--|| MERCHANT : belongs
+  PAYMENT }o--o| TERMINAL : at
+
+  SETTLEMENT_BATCH ||--o{ SETTLEMENT_LINE : contains
+  SETTLEMENT_LINE }o--|| PAYMENT : references
+
+  RECON_RUN ||--o{ RECON_EXCEPTION : may_have
+
+  SCHOOL ||--|| MERCHANT : extends
+  SCHOOL ||--o{ STUDENT : enrolls
+  STUDENT ||--o{ INVOICE : billed
+  INVOICE ||--o{ PAYMENT_ALLOCATION : paid_by
+  PAYMENT_ALLOCATION }o--|| PAYMENT : from
+
+  USER ||--o{ USER_ROLE : has
+  AUDIT_LOG }o--o| USER : actor</pre>
+    </section>
+
+    <section class="diagram-page" id="diagram-13">
+      <div class="meta">Architecture/Enterprise-System-Architecture.md</div>
+      <h2>13. 4.5 Data flow classification</h2>
+      <pre class="mermaid">flowchart LR
+  subgraph hot [Hot - Redis TTL]
+    S1[Session tokens]
+    S2[Merchant profile cache]
+    S3[QR template cache]
+    S4[Rate limit counters]
+  end
+
+  subgraph warm [Warm - PostgreSQL]
+    W1[Active merchants]
+    W2[Today's payments]
+    W3[Open settlement batches]
+  end
+
+  subgraph cold [Cold - S3 / Archive]
+    C1[KYC scans]
+    C2[QR print PDFs]
+    C3[Recon files &gt; 1yr]
+    C4[Archived partitions]
+  end</pre>
+    </section>
+
+    <section class="diagram-page" id="diagram-14">
+      <div class="meta">Architecture/Enterprise-System-Architecture.md</div>
+      <h2>14. 5.1 Security zones</h2>
+      <pre class="mermaid">flowchart TB
+  subgraph zone_public [Zone: Public Internet]
+    Browser[Browsers]
+    Mobile[Issuer Mobile Apps - external]
+  end
+
+  subgraph zone_dmz [Zone: DMZ]
+    WAF[WAF]
+    ALB[ALB TLS termination]
+    CF[CloudFront]
+  end
+
+  subgraph zone_app [Zone: Application Private]
+    API[NestJS API]
+    WEB[Next.js]
+    Workers[Workers]
+  end
+
+  subgraph zone_data [Zone: Data Private - no internet]
+    RDS[(RDS)]
+    Redis[(Redis)]
+    RMQ[(RabbitMQ)]
+  end
+
+  subgraph zone_mgmt [Zone: Management]
+    Bastion[Bastion / SSM]
+    CI[CI/CD]
+  end
+
+  subgraph zone_partner [Zone: Partner - egress only]
+    TIPS[TIPS]
+    CBS[CBS]
+    SMS[SMS GW]
+  end
+
+  Browser --&gt; CF --&gt; WAF --&gt; ALB
+  ALB --&gt; WEB &amp; API
+  API &amp; Workers --&gt; RDS &amp; Redis &amp; RMQ
+  API &amp; Workers --&gt;|mTLS optional| TIPS &amp; CBS &amp; SMS
+  CI --&gt;|deploy| API
+  Bastion -.-&gt;|SSM session| RDS</pre>
+    </section>
+
+    <section class="diagram-page" id="diagram-15">
+      <div class="meta">Architecture/Enterprise-System-Architecture.md</div>
+      <h2>15. 5.2 Authentication &amp; token flow</h2>
+      <pre class="mermaid">sequenceDiagram
+  participant U as User
+  participant N as Next.js
+  participant A as Auth Service
+  participant R as Redis
+  participant DB as PostgreSQL
+
+  U-&gt;&gt;N: Login credentials + MFA
+  N-&gt;&gt;A: POST /auth/login
+  A-&gt;&gt;DB: Validate user + roles
+  A-&gt;&gt;A: Issue access JWT 15m
+  A-&gt;&gt;DB: Store refresh token hash
+  A-&gt;&gt;R: Session metadata
+  A--&gt;&gt;N: accessToken + httpOnly refresh cookie
+  N-&gt;&gt;A: API calls with Bearer JWT
+  A-&gt;&gt;A: Validate signature + claims
+  alt token expired
+    N-&gt;&gt;A: POST /auth/refresh
+    A-&gt;&gt;DB: Rotate refresh token
+    A--&gt;&gt;N: New access JWT
+  end</pre>
+    </section>
+
+    <section class="diagram-page" id="diagram-16">
+      <div class="meta">Architecture/Enterprise-System-Architecture.md</div>
+      <h2>16. 5.3 Authorization model (RBAC)</h2>
+      <pre class="mermaid">flowchart TB
+  User[User] --&gt; Role[Role]
+  Role --&gt; Perm[Permission]
+  Perm --&gt; Res[Resource + Action]
+
+  subgraph examples [Example Permissions]
+    E1[merchant:approve]
+    E2[payment:read]
+    E3[settlement:execute]
+    E4[report:regulatory]
+    E5[school:invoice:create]
+  end
+
+  Res --&gt; examples</pre>
+    </section>
+
+    <section class="diagram-page" id="diagram-17">
+      <div class="meta">Architecture/Enterprise-System-Architecture.md</div>
+      <h2>17. 5.5 Secrets &amp; key management</h2>
+      <pre class="mermaid">flowchart LR
+  SM[AWS Secrets Manager]
+  KMS[AWS KMS]
+
+  SM --&gt;|TIPS credentials| TipsAdapter
+  SM --&gt;|CBS credentials| CbsAdapter
+  SM --&gt;|JWT signing keys| AuthModule
+  SM --&gt;|DB credentials| NestJS
+  KMS --&gt; RDS
+  KMS --&gt; S3</pre>
+    </section>
+
+    <section class="diagram-page" id="diagram-18">
+      <div class="meta">Architecture/Enterprise-System-Architecture.md</div>
+      <h2>18. 6.1 Integration landscape</h2>
+      <pre class="mermaid">flowchart TB
+  MMS[MMS NestJS Platform]
+
+  MMS &lt;--&gt;|REST/mTLS webhooks| TIPS[TIPS Switch]
+  MMS &lt;--&gt;|REST/SOAP ISO20022| CBS[Core Banking]
+  MMS --&gt;|REST| AML[AML Screening]
+  MMS --&gt;|SMPP/REST| SMS[SMS Gateway]
+  MMS --&gt;|SMTP/SES| Email[Email]
+  MMS --&gt;|S3 API| S3[AWS S3]
+  MMS -.-&gt;|future| GePG[GePG]
+  MMS -.-&gt;|optional| ERP[School ERP]
+
+  Meta[Metabase] --&gt;|read-only JDBC| RDS[(PostgreSQL Replica)]
+
+  subgraph patterns [Integration Patterns]
+    P1[Synchronous - query/command]
+    P2[Async webhook - TIPS payments]
+    P3[Async message - RabbitMQ jobs]
+    P4[Batch file - recon CBS EOD]
+  end</pre>
+    </section>
+
+    <section class="diagram-page" id="diagram-19">
+      <div class="meta">Architecture/Enterprise-System-Architecture.md</div>
+      <h2>19. 6.2 Integration adapter pattern</h2>
+      <pre class="mermaid">classDiagram
+  class IntegrationPort {
+    &lt;&lt;interface&gt;&gt;
+    +execute(command)
+  }
+  class TipsAdapter {
+    +registerMerchant()
+    +parsePaymentNotification()
+    +initiateReversal()
+  }
+  class CbsAdapter {
+    +creditSettlementAccount()
+    +verifyAccount()
+    +getEodStatement()
+  }
+  class TipsMockAdapter
+  class TipsLiveAdapter
+  class CbsMockAdapter
+  class CbsLiveAdapter
+
+  IntegrationPort &lt;|.. TipsAdapter
+  IntegrationPort &lt;|.. CbsAdapter
+  TipsAdapter &lt;|-- TipsMockAdapter
+  TipsAdapter &lt;|-- TipsLiveAdapter
+  CbsAdapter &lt;|-- CbsMockAdapter
+  CbsAdapter &lt;|-- CbsLiveAdapter</pre>
+    </section>
+
+    <section class="diagram-page" id="diagram-20">
+      <div class="meta">Architecture/Enterprise-System-Architecture.md</div>
+      <h2>20. 6.4 Error handling &amp; resilience</h2>
+      <pre class="mermaid">stateDiagram-v2
+  [*] --&gt; Received
+  Received --&gt; Validating: parse message
+  Validating --&gt; Accepted: schema OK
+  Validating --&gt; Rejected: invalid
+  Accepted --&gt; Processing: business rules
+  Processing --&gt; Completed: success
+  Processing --&gt; Retry: transient error
+  Retry --&gt; Processing: backoff
+  Retry --&gt; DeadLetter: max retries
+  Processing --&gt; ManualReview: business exception
+  DeadLetter --&gt; ManualReview: ops intervention
+  Completed --&gt; [*]
+  Rejected --&gt; [*]
+  ManualReview --&gt; [*]</pre>
+    </section>
+
+    <section class="diagram-page" id="diagram-21">
+      <div class="meta">Architecture/Enterprise-System-Architecture.md</div>
+      <h2>21. 7.1 TIPS integration components</h2>
+      <pre class="mermaid">flowchart LR
+  subgraph mms_tips [MMS TIPS Integration]
+    RegAPI[Registration API Client]
+    PayHook[Payment Webhook Controller]
+    DirSync[Directory Sync Job]
+    RevAPI[Reversal API Client]
+    MsgLog[Message Audit Log]
+  end
+
+  TIPS[TIPS Platform]
+  Dir[TIPS Directory Service]
+
+  RegAPI --&gt; TIPS
+  PayHook &lt;-- TIPS
+  DirSync --&gt; Dir
+  RevAPI --&gt; TIPS
+  RegAPI &amp; PayHook &amp; RevAPI --&gt; MsgLog</pre>
+    </section>
+
+    <section class="diagram-page" id="diagram-22">
+      <div class="meta">Architecture/Enterprise-System-Architecture.md</div>
+      <h2>22. 7.2 Merchant registration on TIPS</h2>
+      <pre class="mermaid">sequenceDiagram
+  participant Ops as Acquirer Ops
+  participant MMS as MMS MerchantsModule
+  participant TR as TipsRegistrationModule
+  participant TIPS as TIPS Directory
+  participant DB as PostgreSQL
+
+  Ops-&gt;&gt;MMS: Approve merchant KYC
+  MMS-&gt;&gt;DB: status = APPROVED
+  MMS-&gt;&gt;TR: RegisterMerchantCommand
+  TR-&gt;&gt;TR: Build Acquirer ID 5-digit
+  TR-&gt;&gt;TR: Assign Merchant ID &lt;=15 digits
+  TR-&gt;&gt;TR: Generate Lipa Namba alias + Damm
+  TR-&gt;&gt;TIPS: POST register merchant
+  TIPS--&gt;&gt;TR: ACK + directory entry
+  TR-&gt;&gt;DB: tips_registrations SUCCESS
+  TR--&gt;&gt;MMS: merchant.tips.registered event
+  MMS-&gt;&gt;MMS: Trigger QR issuance</pre>
+    </section>
+
+    <section class="diagram-page" id="diagram-23">
+      <div class="meta">Architecture/Enterprise-System-Architecture.md</div>
+      <h2>23. 7.3 Payment notification flow (TIPS → MMS)</h2>
+      <pre class="mermaid">sequenceDiagram
+  participant TIPS as TIPS Switch
+  participant Hook as Payment Webhook
+  participant Pay as PaymentsModule
+  participant Idem as Idempotency Store
+  participant DB as PostgreSQL
+  participant Q as RabbitMQ
+  participant W as Notify Worker
+
+  TIPS-&gt;&gt;Hook: POST payment confirmation
+  Hook-&gt;&gt;Hook: Verify mTLS / HMAC signature
+  Hook-&gt;&gt;Idem: Check tipsEndToEndId
+  alt duplicate
+    Hook--&gt;&gt;TIPS: 200 OK already processed
+  else new
+    Hook-&gt;&gt;Pay: ProcessPaymentNotification
+    Pay-&gt;&gt;DB: INSERT payment SUCCESS
+    Pay-&gt;&gt;DB: INSERT payment_event
+    Pay-&gt;&gt;Q: publish payment.received
+    Hook--&gt;&gt;TIPS: 200 OK
+    Q-&gt;&gt;W: consume event
+    W-&gt;&gt;W: SMS/email merchant
+  end</pre>
+    </section>
+
+    <section class="diagram-page" id="diagram-24">
+      <div class="meta">Architecture/Enterprise-System-Architecture.md</div>
+      <h2>24. 7.4 Transfer reversal flow</h2>
+      <pre class="mermaid">sequenceDiagram
+  participant Ops as Operations
+  participant MMS as DisputesModule
+  participant TIPS as TIPS
+  participant Pay as PaymentsModule
+  participant DB as PostgreSQL
+
+  Ops-&gt;&gt;MMS: Initiate reversal
+  MMS-&gt;&gt;DB: payment status REVERSAL_PENDING
+  MMS-&gt;&gt;TIPS: POST reversal request
+  TIPS--&gt;&gt;MMS: reversal accepted
+  MMS-&gt;&gt;DB: payment status REVERSED
+  MMS-&gt;&gt;DB: audit log</pre>
+    </section>
+
+    <section class="diagram-page" id="diagram-25">
+      <div class="meta">Architecture/Enterprise-System-Architecture.md</div>
+      <h2>25. 8.2 Account verification (onboarding)</h2>
+      <pre class="mermaid">sequenceDiagram
+  participant Ops as Acquirer Ops
+  participant MMS as MerchantsModule
+  participant CBS as Core Banking
+  participant DB as PostgreSQL
+
+  Ops-&gt;&gt;MMS: Submit settlement account
+  MMS-&gt;&gt;CBS: Account enquiry API
+  CBS--&gt;&gt;MMS: Account name match result
+  alt match OK
+    MMS-&gt;&gt;DB: settlement_account VERIFIED
+  else mismatch
+    MMS-&gt;&gt;DB: flag KYC exception
+  end</pre>
+    </section>
+
+    <section class="diagram-page" id="diagram-26">
+      <div class="meta">Architecture/Enterprise-System-Architecture.md</div>
+      <h2>26. 8.3 Settlement posting to CBS</h2>
+      <pre class="mermaid">sequenceDiagram
+  participant Set as SettlementModule
+  participant Q as RabbitMQ
+  participant W as Settlement Worker
+  participant CBS as Core Banking
+  participant DB as PostgreSQL
+  participant GL as General Ledger
+
+  Set-&gt;&gt;DB: Create settlement_batch APPROVED
+  Set-&gt;&gt;Q: settlement.batch.ready
+  Q-&gt;&gt;W: consume
+  loop each settlement_line
+    W-&gt;&gt;CBS: Credit merchant account API
+    CBS--&gt;&gt;W: posting reference
+    W-&gt;&gt;DB: cbs_posting SUCCESS
+    W-&gt;&gt;GL: journal entry optional
+  end
+  W-&gt;&gt;DB: batch status POSTED
+  W-&gt;&gt;Q: settlement.posted event</pre>
+    </section>
+
+    <section class="diagram-page" id="diagram-27">
+      <div class="meta">Architecture/Enterprise-System-Architecture.md</div>
+      <h2>27. 8.4 CBS failure handling</h2>
+      <pre class="mermaid">flowchart TD
+  A[Settlement line ready] --&gt; B{CBS call}
+  B --&gt;|Success| C[Mark POSTED]
+  B --&gt;|Transient| D[Retry queue max 5]
+  B --&gt;|Hard fail| E[Mark FAILED]
+  D --&gt; B
+  E --&gt; F[Ops exception queue]
+  F --&gt; G{Manual action}
+  G --&gt;|Retry| B
+  G --&gt;|Cancel| H[Reverse internal ledger]</pre>
+    </section>
+
+    <section class="diagram-page" id="diagram-28">
+      <div class="meta">Architecture/Enterprise-System-Architecture.md</div>
+      <h2>28. 9.1 Static vs dynamic QR decision</h2>
+      <pre class="mermaid">flowchart TD
+  Start[Payment scenario] --&gt; Q1{Fixed amount known?}
+  Q1 --&gt;|No| Static[Static QR POI 11]
+  Q1 --&gt;|Yes| Dynamic[Dynamic QR POI 12]
+  Static --&gt; S1[Payer enters amount]
+  Dynamic --&gt; D1[Amount in ID 54]
+  S1 &amp; D1 --&gt; Scan[Payer scans via issuer app]
+  Scan --&gt; TIPSFlow[TIPS payment flow]</pre>
+    </section>
+
+    <section class="diagram-page" id="diagram-29">
+      <div class="meta">Architecture/Enterprise-System-Architecture.md</div>
+      <h2>29. 9.2 Dynamic QR generation (MMS internal)</h2>
+      <pre class="mermaid">sequenceDiagram
+  participant M as Merchant Portal
+  participant API as TanqrModule
+  participant Eng as TANQR Engine
+  participant DB as PostgreSQL
+  participant S3 as S3
+
+  M-&gt;&gt;API: Request QR for invoice
+  API-&gt;&gt;DB: Load merchant TIPS ID26 profile
+  API-&gt;&gt;Eng: Build TLV payload
+  Eng-&gt;&gt;Eng: Set ID26 tz.go.bot.tips
+  Eng-&gt;&gt;Eng: Set amount ID54 currency 834
+  Eng-&gt;&gt;Eng: Set bill ref ID62-01
+  Eng-&gt;&gt;Eng: Compute CRC ID63
+  Eng--&gt;&gt;API: payload string
+  API-&gt;&gt;Eng: Render Annex2 layout
+  API-&gt;&gt;S3: Store PNG/PDF
+  API-&gt;&gt;DB: qr_codes record
+  API--&gt;&gt;M: QR image URL + payload</pre>
+    </section>
+
+    <section class="diagram-page" id="diagram-30">
+      <div class="meta">Architecture/Enterprise-System-Architecture.md</div>
+      <h2>30. 9.3 End-to-end QR payment flow (static)</h2>
+      <pre class="mermaid">sequenceDiagram
+  participant Merchant as Merchant
+  participant Payer as Payer
+  participant Issuer as Issuer App
+  participant TIPS as TIPS
+  participant MMS as MMS
+  participant CBS as CBS
+
+  Merchant-&gt;&gt;Merchant: Display static TANQR
+  Payer-&gt;&gt;Issuer: Scan QR
+  Issuer-&gt;&gt;Issuer: Decode EMV payload verify CRC
+  Issuer-&gt;&gt;Payer: Show merchant name amount entry
+  Payer-&gt;&gt;Issuer: Confirm amount
+  Issuer-&gt;&gt;TIPS: Payment initiation
+  TIPS-&gt;&gt;TIPS: Route issuer to acquirer
+  TIPS-&gt;&gt;MMS: Payment notification webhook
+  MMS-&gt;&gt;MMS: Post payment + notify merchant
+  TIPS-&gt;&gt;CBS: Settlement per TIPS rules
+  MMS-&gt;&gt;Merchant: Real-time notification</pre>
+    </section>
+
+    <section class="diagram-page" id="diagram-31">
+      <div class="meta">Architecture/Enterprise-System-Architecture.md</div>
+      <h2>31. 9.4 End-to-end QR payment flow (dynamic)</h2>
+      <pre class="mermaid">sequenceDiagram
+  participant MMS as MMS
+  participant Merchant as Merchant
+  participant Payer as Payer
+  participant Issuer as Issuer App
+  participant TIPS as TIPS
+
+  MMS-&gt;&gt;MMS: Generate dynamic QR per invoice
+  Merchant-&gt;&gt;Payer: Show QR checkout
+  Payer-&gt;&gt;Issuer: Scan QR
+  Issuer-&gt;&gt;Issuer: Amount pre-filled from ID54
+  Payer-&gt;&gt;Issuer: Confirm payment
+  Issuer-&gt;&gt;TIPS: Payment initiation
+  TIPS-&gt;&gt;MMS: Webhook with bill reference
+  MMS-&gt;&gt;MMS: Match invoice mark PAID
+  MMS-&gt;&gt;Merchant: Payment confirmation</pre>
+    </section>
+
+    <section class="diagram-page" id="diagram-32">
+      <div class="meta">Architecture/Enterprise-System-Architecture.md</div>
+      <h2>32. 9.5 Lipa Namba (feature phone) flow</h2>
+      <pre class="mermaid">sequenceDiagram
+  participant Payer as Payer USSD
+  participant Issuer as Issuer EMI
+  participant TIPS as TIPS Directory
+  participant MMS as MMS
+
+  Note over MMS: Alias 8-digit AAA-CCCC-S on QR Part C
+  Payer-&gt;&gt;Issuer: Dial Lipa Namba enter 00112349
+  Issuer-&gt;&gt;TIPS: Resolve alias to merchant ID26
+  TIPS-&gt;&gt;Issuer: Merchant details
+  Payer-&gt;&gt;Issuer: Enter amount confirm
+  Issuer-&gt;&gt;TIPS: Process P2B
+  TIPS-&gt;&gt;MMS: Payment notification
+  MMS-&gt;&gt;MMS: Match merchant alias</pre>
+    </section>
+
+    <section class="diagram-page" id="diagram-33">
+      <div class="meta">Architecture/Enterprise-System-Architecture.md</div>
+      <h2>33. 10.1 School fees domain architecture</h2>
+      <pre class="mermaid">flowchart TB
+  subgraph school_portal [School Portal - Next.js]
+    Bursar[School Bursar UI]
+  end
+
+  subgraph school_api [SchoolFeesModule]
+    FeeCatalog[Fee Catalog]
+    StudentReg[Student Registry]
+    Invoicing[Invoicing Engine]
+    Alloc[Payment Allocator]
+  end
+
+  subgraph shared [Shared Platform]
+    Tanqr[TANQR Engine]
+    Pay[PaymentsModule]
+    Notify[Notifications]
+  end
+
+  Bursar --&gt; school_api
+  Invoicing --&gt; Tanqr
+  Pay --&gt; Alloc
+  Alloc --&gt; Invoicing
+  Pay --&gt; Notify</pre>
+    </section>
+
+    <section class="diagram-page" id="diagram-34">
+      <div class="meta">Architecture/Enterprise-System-Architecture.md</div>
+      <h2>34. 10.2 Term fee billing &amp; QR issuance</h2>
+      <pre class="mermaid">sequenceDiagram
+  participant Bursar as School Bursar
+  participant SF as SchoolFeesModule
+  participant DB as PostgreSQL
+  participant QR as TanqrModule
+  participant Parent as Parent
+
+  Bursar-&gt;&gt;SF: Configure term fees
+  SF-&gt;&gt;DB: fee_items academic_term
+  Bursar-&gt;&gt;SF: Bulk generate invoices
+  SF-&gt;&gt;DB: invoices bill_number UNIQUE
+  SF-&gt;&gt;QR: GenerateDynamicQr per invoice
+  QR--&gt;&gt;SF: QR URL
+  SF-&gt;&gt;DB: link qr_code to invoice
+  SF--&gt;&gt;Bursar: Print / share QR list
+  Bursar-&gt;&gt;Parent: Distribute QR SMS</pre>
+    </section>
+
+    <section class="diagram-page" id="diagram-35">
+      <div class="meta">Architecture/Enterprise-System-Architecture.md</div>
+      <h2>35. 10.3 Parent payment &amp; allocation</h2>
+      <pre class="mermaid">sequenceDiagram
+  participant Parent as Parent
+  participant Issuer as Mobile App
+  participant TIPS as TIPS
+  participant MMS as MMS
+  participant SF as SchoolFeesModule
+  participant DB as PostgreSQL
+
+  Parent-&gt;&gt;Issuer: Scan school fee QR
+  Issuer-&gt;&gt;TIPS: Pay amount + bill ref
+  TIPS-&gt;&gt;MMS: Payment webhook
+  MMS-&gt;&gt;DB: payment SUCCESS
+  MMS-&gt;&gt;SF: AllocatePayment
+  SF-&gt;&gt;DB: payment_allocation
+  SF-&gt;&gt;DB: invoice status PAID/PARTIAL
+  MMS-&gt;&gt;Parent: SMS receipt
+  MMS-&gt;&gt;DB: audit trail</pre>
+    </section>
+
+    <section class="diagram-page" id="diagram-36">
+      <div class="meta">Architecture/Enterprise-System-Architecture.md</div>
+      <h2>36. 10.4 School fees exception paths</h2>
+      <pre class="mermaid">flowchart TD
+  P[Payment received] --&gt; A{Amount vs invoice}
+  A --&gt;|Exact| PAID[Mark PAID]
+  A --&gt;|Overpay| OVER[Credit student balance]
+  A --&gt;|Underpay| PART[Mark PARTIAL open]
+  PART --&gt; N[Notify bursar]
+  OVER --&gt; N
+  PAID --&gt; R[Generate receipt PDF]</pre>
+    </section>
+
+    <section class="diagram-page" id="diagram-37">
+      <div class="meta">Architecture/Enterprise-System-Architecture.md</div>
+      <h2>37. 11.1 Settlement architecture</h2>
+      <pre class="mermaid">flowchart TB
+  subgraph inputs [Inputs]
+    P1[Successful payments]
+    F1[Fee rules MDR TIPS charges]
+    C1[Settlement calendar]
+  end
+
+  subgraph engine [Settlement Engine]
+    Agg[Aggregator by merchant]
+    Fee[Fee calculator]
+    Batch[Batch builder]
+    Approve[Maker-checker approval]
+  end
+
+  subgraph outputs [Outputs]
+    CBSW[CBS posting worker]
+    Stmt[Merchant statements]
+    GL[GL entries]
+  end
+
+  P1 --&gt; Agg
+  F1 --&gt; Fee
+  C1 --&gt; Batch
+  Agg --&gt; Fee --&gt; Batch --&gt; Approve
+  Approve --&gt; CBSW
+  Approve --&gt; Stmt
+  CBSW --&gt; GL</pre>
+    </section>
+
+    <section class="diagram-page" id="diagram-38">
+      <div class="meta">Architecture/Enterprise-System-Architecture.md</div>
+      <h2>38. 11.2 Settlement batch lifecycle</h2>
+      <pre class="mermaid">stateDiagram-v2
+  [*] --&gt; OPEN: cut-off reached
+  OPEN --&gt; CALCULATED: aggregate payments
+  CALCULATED --&gt; PENDING_APPROVAL: fee applied
+  PENDING_APPROVAL --&gt; APPROVED: finance approves
+  PENDING_APPROVAL --&gt; REJECTED: sent back
+  REJECTED --&gt; CALCULATED: recalc
+  APPROVED --&gt; POSTING: CBS worker
+  POSTING --&gt; POSTED: all lines success
+  POSTING --&gt; PARTIAL_POSTED: some failures
+  PARTIAL_POSTED --&gt; POSTED: retry success
+  POSTED --&gt; [*]</pre>
+    </section>
+
+    <section class="diagram-page" id="diagram-39">
+      <div class="meta">Architecture/Enterprise-System-Architecture.md</div>
+      <h2>39. 11.3 End-to-end settlement sequence</h2>
+      <pre class="mermaid">sequenceDiagram
+  participant Pay as PaymentsModule
+  participant Set as SettlementModule
+  participant Fin as Finance Officer
+  participant Q as RabbitMQ
+  participant W as Settlement Worker
+  participant CBS as Core Banking
+  participant Mer as Merchant
+
+  Pay-&gt;&gt;Set: payments eligible at T+0 cut-off
+  Set-&gt;&gt;Set: Build batch per merchant
+  Set-&gt;&gt;Fin: Pending approval notification
+  Fin-&gt;&gt;Set: Approve batch
+  Set-&gt;&gt;Q: settlement.batch.ready
+  Q-&gt;&gt;W: Process batch
+  W-&gt;&gt;CBS: Credit settlement accounts
+  W-&gt;&gt;W: Deduct MDR fees
+  W-&gt;&gt;Set: Mark POSTED
+  Set-&gt;&gt;Mer: Settlement advice notification</pre>
+    </section>
+
+    <section class="diagram-page" id="diagram-40">
+      <div class="meta">Architecture/Enterprise-System-Architecture.md</div>
+      <h2>40. 11.4 Fee distribution model</h2>
+      <pre class="mermaid">flowchart LR
+  Gross[Gross payment amount] --&gt; MDR[MDR acquirer fee]
+  Gross --&gt; Switch[TIPS switch fee]
+  MDR --&gt; Net[Net to merchant]
+  Switch --&gt; Net
+  Net --&gt; CBS[Credit merchant CBS account]
+  MDR --&gt; GL1[Acquirer income GL]
+  Switch --&gt; GL2[Pass-through GL]</pre>
+    </section>
+
+    <section class="diagram-page" id="diagram-41">
+      <div class="meta">Architecture/Enterprise-System-Architecture.md</div>
+      <h2>41. 12.1 Three-way reconciliation model</h2>
+      <pre class="mermaid">flowchart TB
+  subgraph leg1 [Leg 1 - MMS Internal]
+    MMS_L[MMS payments ledger]
+  end
+
+  subgraph leg2 [Leg 2 - TIPS]
+    TIPS_L[TIPS settlement report]
+  end
+
+  subgraph leg3 [Leg 3 - CBS]
+    CBS_L[CBS account statement EOD]
+  end
+
+  subgraph recon [Reconciliation Engine]
+    Match[Matching engine]
+    Exc[Exception queue]
+  end
+
+  MMS_L --&gt; Match
+  TIPS_L --&gt; Match
+  CBS_L --&gt; Match
+  Match --&gt;|matched| Closed[Close recon run]
+  Match --&gt;|unmatched| Exc
+  Exc --&gt; Ops[Operations analyst]</pre>
+    </section>
+
+    <section class="diagram-page" id="diagram-42">
+      <div class="meta">Architecture/Enterprise-System-Architecture.md</div>
+      <h2>42. 12.2 Reconciliation run sequence</h2>
+      <pre class="mermaid">sequenceDiagram
+  participant Sched as Scheduler
+  participant Recon as ReconciliationModule
+  participant DB as PostgreSQL
+  participant TIPS as TIPS Reports
+  participant CBS as CBS EOD
+  participant Ops as Operations
+
+  Sched-&gt;&gt;Recon: Start daily recon T+1
+  Recon-&gt;&gt;DB: snapshot MMS payments
+  Recon-&gt;&gt;TIPS: Fetch settlement file API
+  Recon-&gt;&gt;CBS: Fetch statement API
+  Recon-&gt;&gt;Recon: Match on tipsEndToEndId amount date
+  Recon-&gt;&gt;DB: recon_matches
+  alt exceptions found
+    Recon-&gt;&gt;DB: recon_exceptions UNMATCHED
+    Recon-&gt;&gt;Ops: Alert dashboard
+  else all matched
+    Recon-&gt;&gt;DB: recon_run CLOSED
+  end</pre>
+    </section>
+
+    <section class="diagram-page" id="diagram-43">
+      <div class="meta">Architecture/Enterprise-System-Architecture.md</div>
+      <h2>43. 12.3 Exception types &amp; resolution</h2>
+      <pre class="mermaid">flowchart TD
+  E[Exception] --&gt; T1[MMS only - missing in TIPS]
+  E --&gt; T2[TIPS only - missing in MMS]
+  E --&gt; T3[Amount mismatch]
+  E --&gt; T4[CBS posting mismatch]
+  E --&gt; T5[Timing cut-off difference]
+
+  T1 --&gt; R1[Investigate webhook failure]
+  T2 --&gt; R2[Manual payment ingest]
+  T3 --&gt; R3[Fee config review]
+  T4 --&gt; R4[Retry CBS posting]
+  T5 --&gt; R5[Roll to next cycle]</pre>
+    </section>
+
+    <section class="diagram-page" id="diagram-44">
+      <div class="meta">Architecture/Enterprise-System-Architecture.md</div>
+      <h2>44. 12.4 Reconciliation state machine</h2>
+      <pre class="mermaid">stateDiagram-v2
+  [*] --&gt; INITIATED
+  INITIATED --&gt; DATA_COLLECTED: all sources loaded
+  DATA_COLLECTED --&gt; MATCHING: engine running
+  MATCHING --&gt; CLOSED: zero exceptions
+  MATCHING --&gt; EXCEPTIONS_OPEN: breaks found
+  EXCEPTIONS_OPEN --&gt; IN_REVIEW: ops assigned
+  IN_REVIEW --&gt; CLOSED: all resolved
+  IN_REVIEW --&gt; ESCALATED: compliance
+  CLOSED --&gt; [*]</pre>
+    </section>
+
+    <section class="diagram-page" id="diagram-45">
+      <div class="meta">Architecture/Module-Breakdown.md</div>
+      <h2>45. Module dependency map</h2>
+      <pre class="mermaid">flowchart TB
+  Auth[1 Authentication]
+  Authz[2 Authorization]
+  Config[16 Configuration]
+  Users[17 User Management]
+  Audit[15 Audit Logs]
+  MC[14 Maker Checker]
+
+  Auth --&gt; Authz
+  Users --&gt; Auth
+  Config --&gt; Authz
+
+  Onboard[4 Merchant Onboarding]
+  Merchant[3 Merchant Management]
+  Alias[6 Alias Merchant ID]
+  QR[5 QR Management]
+  Tips[18 TIPS Integration]
+  CBS[19 CBS Integration]
+
+  Onboard --&gt; Merchant
+  Merchant --&gt; Tips
+  Merchant --&gt; Alias
+  Merchant --&gt; QR
+  Tips --&gt; QR
+
+  Txn[8 Transactions]
+  Tips --&gt; Txn
+  QR --&gt; Txn
+  School[7 School Fee Collection]
+  School --&gt; QR
+  School --&gt; Txn
+
+  Settle[9 Settlement]
+  Txn --&gt; Settle
+  CBS --&gt; Settle
+
+  Recon[10 Reconciliation]
+  Settle --&gt; Recon
+  Tips --&gt; Recon
+  CBS --&gt; Recon
+
+  Notify[13 Notifications]
+  Txn --&gt; Notify
+  Settle --&gt; Notify
+
+  Report[11 Reporting]
+  Dash[12 Dashboard]
+  Recon --&gt; Report
+  Txn --&gt; Dash
+
+  MC --&gt; Onboard
+  MC --&gt; Settle
+  Audit --&gt; Auth &amp; Merchant &amp; Txn &amp; Settle
+  Monitor[20 Monitoring]</pre>
+    </section>
+
+    <section class="diagram-page" id="diagram-46">
+      <div class="meta">Architecture/tech-stack.md</div>
+      <h2>46. Architecture</h2>
+      <pre class="mermaid">flowchart TB
+  subgraph clients [Clients]
+    Web[Next.js Frontend :3000]
+  end
+
+  subgraph edge [Edge]
+    Nginx[Nginx]
+  end
+
+  subgraph app [Application]
+    API[NestJS API :3001]
+  end
+
+  subgraph data [Data]
+    PG[(PostgreSQL / Supabase)]
+    Redis[(Redis)]
+    RMQ[RabbitMQ]
+  end
+
+  Web --&gt; Nginx
+  Nginx --&gt; Web
+  Nginx --&gt;|/api/*| API
+  API --&gt; PG
+  API --&gt; Redis
+  API --&gt; RMQ</pre>
+    </section>
+
+    <section class="diagram-page" id="diagram-47">
+      <div class="meta">Database/docs/Database-Schema.md</div>
+      <h2>47. Entity Relationship Diagram — Overview</h2>
+      <pre class="mermaid">erDiagram
+  ACQUIRERS ||--o{ USERS : employs
+  ACQUIRERS ||--o{ MERCHANTS : acquires
+  ACQUIRERS ||--o{ FEE_RULES : defines
+
+  USERS ||--o| AUTH_CREDENTIALS : has
+  USERS ||--o{ USER_ROLES : assigned
+  ROLES ||--o{ ROLE_PERMISSIONS : grants
+  PERMISSIONS ||--o{ ROLE_PERMISSIONS : included
+
+  MERCHANTS ||--|| MERCHANT_PROFILES : has
+  MERCHANTS ||--o{ STORES : owns
+  STORES ||--o{ TERMINALS : has
+  MERCHANTS ||--o{ SETTLEMENT_ACCOUNTS : credits
+  MERCHANTS ||--o| TIPS_REGISTRATIONS : registered
+  MERCHANTS ||--o| MERCHANT_ALIASES : lipa_namba
+  MERCHANTS ||--o{ QR_CODES : displays
+
+  MERCHANTS ||--o{ PAYMENTS : receives
+  PAYMENTS ||--|| PAYMENT_METADATA : extends
+  PAYMENTS ||--o{ PAYMENT_EVENTS : logs
+  PAYMENTS ||--o{ SETTLEMENT_LINES : settled
+
+  SETTLEMENT_BATCHES ||--o{ SETTLEMENT_LINES : contains
+  SETTLEMENT_LINES ||--o| CBS_POSTINGS : posts
+
+  MERCHANTS ||--o| SCHOOLS : may_be
+  SCHOOLS ||--o{ STUDENTS : enrolls
+  STUDENTS ||--o{ INVOICES : billed
+  INVOICES ||--o{ PAYMENT_ALLOCATIONS : paid_by
+  PAYMENTS ||--o{ PAYMENT_ALLOCATIONS : allocates
+
+  ACQUIRERS {
+    uuid id PK
+    varchar code UK
+    char tips_acquirer_id_5
+    timestamptz deleted_at
+  }
+
+  MERCHANTS {
+    uuid id PK
+    uuid acquirer_id FK
+    varchar trading_name
+    merchant_status status
+    char mcc FK
+    timestamptz deleted_at
+  }
+
+  PAYMENTS {
+    uuid id PK
+    varchar tips_end_to_end_id UK
+    numeric amount
+    payment_status status
+  }</pre>
+    </section>
+
+    <section class="diagram-page" id="diagram-48">
+      <div class="meta">Database/docs/Database-Schema.md</div>
+      <h2>48. ERD — Identity &amp; Authorization</h2>
+      <pre class="mermaid">erDiagram
+  ACQUIRERS ||--o{ USERS : has
+  USERS ||--|| USER_PROFILES : profile
+  USERS ||--|| AUTH_CREDENTIALS : auth
+  USERS ||--o{ REFRESH_TOKENS : sessions
+  USERS ||--o{ USER_ROLES : roles
+  ROLES ||--o{ ROLE_PERMISSIONS : perms
+  PERMISSIONS ||--o{ ROLE_PERMISSIONS : on
+  ACQUIRERS ||--o{ API_CLIENTS : integrators
+  USERS ||--o{ USER_INVITATIONS : invites
+
+  USERS {
+    uuid id PK
+    uuid acquirer_id FK
+    uuid merchant_id FK
+    citext email UK
+    user_status status
+    timestamptz created_at
+    timestamptz deleted_at
+  }
+
+  AUTH_CREDENTIALS {
+    uuid user_id PK_FK
+    varchar password_hash
+    boolean mfa_enabled
+    timestamptz lockout_until
+  }
+
+  REFRESH_TOKENS {
+    uuid id PK
+    uuid user_id FK
+    varchar token_hash
+    uuid family_id
+    timestamptz expires_at
+    timestamptz revoked_at
+  }
+
+  ROLES {
+    uuid id PK
+    varchar code UK
+    boolean is_system
+  }
+
+  PERMISSIONS {
+    uuid id PK
+    varchar code UK
+    varchar module
+  }</pre>
+    </section>
+
+    <section class="diagram-page" id="diagram-49">
+      <div class="meta">Database/docs/Database-Schema.md</div>
+      <h2>49. ERD — Merchant &amp; Onboarding</h2>
+      <pre class="mermaid">erDiagram
+  ACQUIRERS ||--o{ ONBOARDING_APPLICATIONS : receives
+  ONBOARDING_APPLICATIONS ||--o| MERCHANTS : creates
+  ONBOARDING_APPLICATIONS ||--o{ ONBOARDING_STEPS : steps
+  ONBOARDING_APPLICATIONS ||--o{ KYC_SUBMISSIONS : documents
+  ONBOARDING_APPLICATIONS ||--o{ KYC_REVIEWS : reviews
+  ONBOARDING_APPLICATIONS ||--o{ BENEFICIAL_OWNERS : owners
+  ONBOARDING_APPLICATIONS ||--o{ AML_SCREENING_RESULTS : aml
+
+  MERCHANTS ||--|| MERCHANT_PROFILES : address
+  MERCHANTS ||--o{ STORES : outlets
+  MERCHANTS ||--o{ TERMINALS : via_stores
+  MERCHANTS ||--o{ SETTLEMENT_ACCOUNTS : bank
+  MERCHANTS ||--o| MERCHANT_LIMITS : limits
+  MERCHANTS ||--o{ MERCHANT_DOCUMENTS : docs
+  MERCHANTS }o--|| MCC_REFERENCE : category
+  MERCHANT_PROFILES }o--|| POSTCODE_REFERENCE : postal
+
+  MERCHANTS {
+    uuid id PK
+    uuid acquirer_id FK
+    varchar legal_name
+    varchar trading_name
+    merchant_status status
+    char mcc FK
+    boolean is_school
+  }
+
+  ONBOARDING_APPLICATIONS {
+    uuid id PK
+    onboarding_status status
+    varchar application_no UK
+    uuid merchant_id FK
+  }
+
+  STORES {
+    uuid id PK
+    uuid merchant_id FK
+    varchar store_label UK
+  }
+
+  TERMINALS {
+    uuid id PK
+    uuid store_id FK
+    varchar terminal_label UK
+  }</pre>
+    </section>
+
+    <section class="diagram-page" id="diagram-50">
+      <div class="meta">Database/docs/Database-Schema.md</div>
+      <h2>50. ERD — TIPS, QR &amp; Lipa Namba</h2>
+      <pre class="mermaid">erDiagram
+  MERCHANTS ||--o| TIPS_REGISTRATIONS : tips_id26
+  MERCHANTS ||--o| MERCHANT_ALIASES : alias_8
+  MERCHANTS ||--o{ QR_CODES : qr
+  QR_CODES ||--o{ QR_PAYLOAD_VERSIONS : versions
+  QR_CODES ||--o{ QR_RENDER_ASSETS : assets
+  QR_CODES }o--o| STORES : optional
+  QR_CODES }o--o| TERMINALS : optional
+  ACQUIRERS ||--o{ QR_TEMPLATES : branding
+
+  TIPS_REGISTRATIONS {
+    uuid id PK
+    uuid merchant_id FK_UK
+    char acquirer_id_5
+    varchar merchant_id_15 UK
+    varchar domain_name
+    tips_registration_status status
+  }
+
+  MERCHANT_ALIASES {
+    uuid id PK
+    uuid merchant_id FK_UK
+    char alias_8digit UK
+    char acquirer_code_3
+    char merchant_code_4
+    char checksum_1
+  }
+
+  QR_CODES {
+    uuid id PK
+    uuid merchant_id FK
+    qr_type qr_type
+    qr_status status
+    char poi_method
+    timestamptz expires_at
+  }
+
+  QR_PAYLOAD_VERSIONS {
+    uuid id PK
+    uuid qr_id FK
+    int version
+    text tlv_payload
+    char crc_value
+    numeric amount
+  }</pre>
+    </section>
+
+    <section class="diagram-page" id="diagram-51">
+      <div class="meta">Database/docs/Database-Schema.md</div>
+      <h2>51. ERD — Payments, Settlement &amp; Reconciliation</h2>
+      <pre class="mermaid">erDiagram
+  MERCHANTS ||--o{ PAYMENTS : txn
+  PAYMENTS ||--|| PAYMENT_METADATA : meta
+  PAYMENTS ||--o{ PAYMENT_EVENTS : events
+  PAYMENTS ||--o{ REFUNDS : refunds
+  PAYMENTS ||--o| SETTLEMENT_LINES : one_line
+  SETTLEMENT_BATCHES ||--o{ SETTLEMENT_LINES : batch
+  SETTLEMENT_LINES ||--o| CBS_POSTINGS : cbs
+
+  ACQUIRERS ||--o{ RECON_RUNS : daily
+  RECON_RUNS ||--o{ RECON_SOURCES : sources
+  RECON_RUNS ||--o{ RECON_MATCHES : matches
+  RECON_RUNS ||--o{ RECON_EXCEPTIONS : breaks
+  RECON_EXCEPTIONS ||--o{ RECON_RESOLUTIONS : resolved
+
+  PAYMENTS {
+    uuid id PK
+    varchar tips_end_to_end_id UK
+    numeric amount
+    payment_status status
+    payment_channel channel
+    timestamptz received_at
+  }
+
+  SETTLEMENT_BATCHES {
+    uuid id PK
+    varchar batch_no UK
+    settlement_batch_status status
+    numeric net_total
+  }
+
+  SETTLEMENT_LINES {
+    uuid id PK
+    uuid payment_id FK_UK
+    numeric net_amount
+  }
+
+  CBS_POSTINGS {
+    uuid id PK
+    varchar idempotency_key UK
+    cbs_posting_status status
+  }
+
+  RECON_EXCEPTIONS {
+    uuid id PK
+    recon_exception_status status
+    varchar exception_type
+  }</pre>
+    </section>
+
+    <section class="diagram-page" id="diagram-52">
+      <div class="meta">Database/docs/Database-Schema.md</div>
+      <h2>52. ERD — School Fee Collection</h2>
+      <pre class="mermaid">erDiagram
+  MERCHANTS ||--|| SCHOOLS : is_school
+  MERCHANTS ||--o{ ACADEMIC_YEARS : years
+  ACADEMIC_YEARS ||--o{ TERMS : terms
+  MERCHANTS ||--o{ FEE_ITEMS : fees
+  MERCHANTS ||--o{ SCHOOL_CLASSES : classes
+  MERCHANTS ||--o{ STUDENTS : students
+  STUDENTS }o--o| SCHOOL_CLASSES : class
+  STUDENTS ||--o{ INVOICES : invoices
+  TERMS ||--o{ INVOICES : term
+  INVOICES ||--o{ INVOICE_LINES : lines
+  FEE_ITEMS ||--o{ INVOICE_LINES : item
+  INVOICES ||--o{ PAYMENT_ALLOCATIONS : paid
+  PAYMENTS ||--o{ PAYMENT_ALLOCATIONS : pays
+  INVOICES }o--o| QR_CODES : dynamic_qr
+  STUDENTS ||--o| STUDENT_BALANCES : balance
+
+  SCHOOLS {
+    uuid merchant_id PK_FK
+    varchar registration_no
+  }
+
+  STUDENTS {
+    uuid id PK
+    varchar admission_no UK
+    bytea guardian_phone_enc
+  }
+
+  INVOICES {
+    uuid id PK
+    varchar bill_number UK
+    invoice_status status
+    numeric total_amount
+    numeric paid_amount
+    uuid qr_id FK
+  }
+
+  PAYMENT_ALLOCATIONS {
+    uuid id PK
+    uuid payment_id FK
+    uuid invoice_id FK
+    numeric amount
+  }</pre>
+    </section>
+
+    <section class="diagram-page" id="diagram-53">
+      <div class="meta">Database/docs/Database-Schema.md</div>
+      <h2>53. ERD — Approvals, Audit &amp; Integration</h2>
+      <pre class="mermaid">erDiagram
+  ACQUIRERS ||--o{ APPROVAL_POLICIES : policies
+  APPROVAL_TASKS ||--o| APPROVAL_DECISIONS : decision
+  USERS ||--o{ APPROVAL_TASKS : maker
+  USERS ||--o{ APPROVAL_DECISIONS : checker
+
+  ACQUIRERS ||--o{ TIPS_MESSAGE_LOG : tips_log
+  ACQUIRERS ||--o{ CBS_MESSAGE_LOG : cbs_log
+  MERCHANTS ||--o{ CBS_ACCOUNT_VERIFICATIONS : verify
+
+  ACQUIRERS ||--o{ AUDIT_LOGS : audit
+
+  APPROVAL_TASKS {
+    uuid id PK
+    approval_entity_type entity_type
+    uuid entity_id
+    approval_task_status status
+    uuid maker_id FK
+  }
+
+  AUDIT_LOGS {
+    uuid id PK
+    varchar action
+    varchar entity_type
+    uuid entity_id
+    jsonb old_values
+    jsonb new_values
+    timestamptz created_at
+  }
+
+  TIPS_MESSAGE_LOG {
+    uuid id PK
+    varchar direction
+    varchar correlation_id
+    jsonb payload_json
+  }</pre>
+    </section>
+
+    <section class="diagram-page" id="diagram-54">
+      <div class="meta">Docs/BRD-Merchant-Management-System.md</div>
+      <h2>54. 2.4 Business processes (high level)</h2>
+      <pre class="mermaid">flowchart LR
+  subgraph onboarding [Merchant Onboarding]
+    A[Application/KYC] --&gt; B[Risk Approval]
+    B --&gt; C[MCC &amp; Profile]
+    C --&gt; D[TIPS Registration]
+    D --&gt; E[QR / Lipa Namba Issuance]
+  end
+  subgraph payment [Payment Acceptance]
+    P[Payer scans QR or dials Lipa Namba]
+    P --&gt; Q[Issuer App / USSD]
+    Q --&gt; R[TIPS Routing]
+    R --&gt; S[Settlement to Merchant]
+    S --&gt; T[MMS Notification &amp; Posting]
+  end
+  subgraph school [School Fees]
+    SF1[Fee Structure Setup] --&gt; SF2[Student/Control Number]
+    SF2 --&gt; SF3[Dynamic QR / Bill]
+    SF3 --&gt; SF4[Payment &amp; Receipt]
+  end
+  onboarding --&gt; payment
+  school --&gt; payment</pre>
+    </section>
+  </main>
+  <script>
+    mermaid.initialize({ startOnLoad: true, theme: 'neutral', securityLevel: 'loose' });
+    // Mark workflow section anchor
+    const wf = document.getElementById('diagram-21');
+    if (wf) wf.id = 'workflow';
+  </script>
+</body>
+</html>

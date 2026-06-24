@@ -1,0 +1,19 @@
+sequenceDiagram
+  participant Set as SettlementModule
+  participant Q as RabbitMQ
+  participant W as Settlement Worker
+  participant CBS as Core Banking
+  participant DB as PostgreSQL
+  participant GL as General Ledger
+
+  Set->>DB: Create settlement_batch APPROVED
+  Set->>Q: settlement.batch.ready
+  Q->>W: consume
+  loop each settlement_line
+    W->>CBS: Credit merchant account API
+    CBS-->>W: posting reference
+    W->>DB: cbs_posting SUCCESS
+    W->>GL: journal entry optional
+  end
+  W->>DB: batch status POSTED
+  W->>Q: settlement.posted event

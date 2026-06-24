@@ -1,0 +1,42 @@
+flowchart TB
+  subgraph school_portal [School Portal - Next.js]
+    Bursar[School Bursar UI]
+    BulkUI[Bulk Student Upload]
+  end
+
+  subgraph school_api [SchoolFeesModule]
+    FeeCatalog[Fee Catalog]
+    StudentReg[Student Registry]
+    BulkUpload[Bulk Upload API]
+    StudentAlias[Student Alias Service]
+    Invoicing[Invoicing Engine]
+    Alloc[Payment Allocator]
+  end
+
+  subgraph shared [Shared Platform]
+    Tanqr[TANQR Engine]
+    TipsJob[TIPS Alias Registration Job]
+    Pay[PaymentsModule]
+    Route[Payment Routing tag 62/05]
+    Notify[Notifications SMS]
+  end
+
+  subgraph data [Data Stores]
+    StudentAliases[(student_aliases)]
+    SchoolSeq[(school_sequences)]
+  end
+
+  Bursar --> school_api
+  BulkUI --> BulkUpload
+  BulkUpload --> StudentReg
+  StudentReg --> StudentAlias
+  StudentAlias --> StudentAliases
+  StudentAlias --> SchoolSeq
+  StudentAlias --> Tanqr
+  StudentAlias --> TipsJob
+  Invoicing --> Tanqr
+  Pay --> Route
+  Route --> StudentAliases
+  Route --> Alloc
+  Alloc --> Invoicing
+  Pay --> Notify

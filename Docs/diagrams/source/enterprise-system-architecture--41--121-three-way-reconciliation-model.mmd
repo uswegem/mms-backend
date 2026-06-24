@@ -1,0 +1,24 @@
+flowchart TB
+  subgraph leg1 [Leg 1 - MMS Internal]
+    MMS_L[MMS payments ledger]
+  end
+
+  subgraph leg2 [Leg 2 - TIPS]
+    TIPS_L[TIPS settlement report]
+  end
+
+  subgraph leg3 [Leg 3 - CBS]
+    CBS_L[CBS account statement EOD]
+  end
+
+  subgraph recon [Reconciliation Engine]
+    Match[Matching engine]
+    Exc[Exception queue]
+  end
+
+  MMS_L --> Match
+  TIPS_L --> Match
+  CBS_L --> Match
+  Match -->|matched| Closed[Close recon run]
+  Match -->|unmatched| Exc
+  Exc --> Ops[Operations analyst]

@@ -1,0 +1,28 @@
+flowchart LR
+  subgraph next_app [Next.js Frontend]
+    subgraph routes [App Router]
+      AuthR[/login /logout]
+      AdminR[/admin/*]
+      MerchantR[/merchant/*]
+      SchoolR[/school/*]
+      ReportsR[/reports/*]
+    end
+    subgraph client [Client Layer]
+      APIClient[API Client - axios/fetch]
+      AuthCtx[Auth Context - tokens]
+      RQ[React Query cache]
+    end
+    subgraph ui [UI Components]
+      Layout[Layouts / RBAC guards]
+      QRView[QR Preview / Download]
+      Dash[Dashboards]
+    end
+  end
+
+  AuthR --> AuthCtx
+  AdminR & MerchantR & SchoolR --> Layout
+  Layout --> APIClient
+  APIClient -->|REST + JWT| NestAPI[NestJS API]
+  QRView --> APIClient
+  Dash --> RQ
+  RQ --> APIClient

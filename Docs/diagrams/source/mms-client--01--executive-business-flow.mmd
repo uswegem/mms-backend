@@ -1,0 +1,57 @@
+%%{init: {'flowchart': {'nodeSpacing': 40, 'rankSpacing': 50}, 'themeVariables': {'fontSize': '22px'}}}%%
+flowchart TB
+  classDef phase fill:#FFF176,stroke:#F57F17,stroke-width:3px,color:#000,font-weight:bold
+  classDef step fill:#E3F2FD,stroke:#1565C0,stroke-width:2px,color:#000
+
+  subgraph P1["PHASE 1 — ACQUIRE"]
+    direction LR
+    A1["Onboard Merchant / School"]:::step
+    A2["KYC + Maker-Checker"]:::step
+    A3["CBS Account Validation"]:::step
+    A1 --> A2 --> A3
+  end
+
+  subgraph P2["PHASE 2 — REGISTER SCHOOL  (after onboarding approved)"]
+    direction LR
+    B1["TIPS Merchant Registration"]:::step
+    B2["School Adhoc Alias + Static TANQR"]:::step
+    B3["Assign School Sequence"]:::step
+    B1 --> B2 --> B3
+  end
+
+  subgraph P3["PHASE 3 — ENROLL STUDENTS  (single or bulk upload)"]
+    direction LR
+    C1["Create / Bulk CSV Upload"]:::step
+    C2["Permanent Lipa Namba per student"]:::step
+    C3["Internal Routing ID"]:::step
+    C4["Permanent Static TANQR"]:::step
+    C5["TIPS Alias Registration"]:::step
+    C1 --> C2 --> C3 --> C4 --> C5
+  end
+
+  subgraph P4["PHASE 4 — TRANSACT"]
+    direction LR
+    D1["Parent pays via Lipa Namba / QR"]:::step
+    D2["TIPS credits school account"]:::step
+    D3["MMS routes via tag 62/05"]:::step
+    D1 --> D2 --> D3
+  end
+
+  subgraph P5["PHASE 5 — SETTLE & MATCH"]
+    direction LR
+    E1["Settlement batch + approval"]:::step
+    E2["CBS credit to merchant"]:::step
+    E3["Reconcile MMS / TIPS / CBS"]:::step
+    E1 --> E2 --> E3
+  end
+
+  subgraph P6["PHASE 6 — REPORT"]
+    direction LR
+    F1["Dashboards & Analytics"]:::step
+    F2["SMS to parent"]:::step
+    F1 --> F2
+  end
+
+  P1 --> P2 --> P3 --> P4 --> P5 --> P6
+
+  class P1,P2,P3,P4,P5,P6 phase
