@@ -1,0 +1,74 @@
+name: Deploy MMS Backend
+
+on:
+  workflow_dispatch:
+    inputs:
+      environment:
+        description: 'Target environment'
+        required: true
+        type: choice
+        options:
+          - uat
+          - prod
+
+jobs:
+  deploy:
+    name: Deploy to ${{ github.event.inputs.environment }}
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '18'
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Build
+        run: npm run build
+
+      - name: Set deploy variables
+        id: vars
+        run: |
+          if [ "${{ github.event.inputs.environment }}" = "prod" ]; then
+            echo "deploy_path=/opt/mms/backend/prod" >> $GITHUB_OUTPUT
+            echo "pm2_app=mms-backend-prod" >> $GITHUB_OUTPUT
+            echo "port=3000" >> $GITHUB_OUTPUT
+          else
+            echo "deploy_path=/opt/mms/backend/uat" >> $GITHUB_OUTPUT
+            echo "pm2_app=mms-backend-uat" >> $GITHUB_OUTPUT
+            echo "port=3001" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Copy build to Hetzner
+        uses: appleboy/scp-action@v0.1.7
+        with:
+          host: ${{ secrets.HETZNER_HOST }}
+          username: ${{ secrets.HETZNER_USER }}
+          key: ${{ secrets.HETZNER_SSH_KEY }}
+          source: "dist/,package.json,package-lock.json,prisma/"
+          target: ${{ steps.vars.outputs.deploy_path }}
+
+      - name: Install & restart on Hetzner
+        uses: appleboy/ssh-action@v1.0.3
+        with:
+          host: ${{ secrets.HETZNER_HOST }}
+          username: ${{ secrets.HETZNER_USER }}
+          key: ${{ secrets.HETZNER_SSH_KEY }}
+          script: |
+            cd ${{ steps.vars.outputs.deploy_path }}
+            npm ci --omit=dev
+            npx prisma generate
+            pm2 restart ${{ steps.vars.outputs.pm2_app }} \
+              || pm2 start dist/main.js \
+                  --name ${{ steps.vars.outputs.pm2_app }} \
+                  --env production
+            pm2 save
+
+      - name: Confirm deployment
+        run: echo "✅ Backend deployed to ${{ github.event.inputs.environment }}"
