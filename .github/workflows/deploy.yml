@@ -53,7 +53,8 @@ jobs:
           key: ${{ secrets.HETZNER_SSH_KEY }}
           source: "dist/,package.json,package-lock.json,prisma/"
           target: ${{ steps.vars.outputs.deploy_path }}
-            - name: Install & restart on Hetzner
+
+      - name: Install & restart on Hetzner
         uses: appleboy/ssh-action@v1.0.3
         with:
           host: ${{ secrets.HETZNER_HOST }}
