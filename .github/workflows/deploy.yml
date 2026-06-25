@@ -53,8 +53,7 @@ jobs:
           key: ${{ secrets.HETZNER_SSH_KEY }}
           source: "dist/,package.json,package-lock.json,prisma/"
           target: ${{ steps.vars.outputs.deploy_path }}
-
-      - name: Install & restart on Hetzner
+            - name: Install & restart on Hetzner
         uses: appleboy/ssh-action@v1.0.3
         with:
           host: ${{ secrets.HETZNER_HOST }}
@@ -64,10 +63,10 @@ jobs:
             cd ${{ steps.vars.outputs.deploy_path }}
             npm ci --omit=dev
             npx prisma generate
+            npx prisma migrate deploy
             pm2 restart ${{ steps.vars.outputs.pm2_app }} \
               || pm2 start dist/main.js \
-                  --name ${{ steps.vars.outputs.pm2_app }} \
-                  --env production
+                  --name ${{ steps.vars.outputs.pm2_app }}
             pm2 save
 
       - name: Confirm deployment
