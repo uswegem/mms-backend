@@ -21,8 +21,17 @@ export class MerchantProfileDto {
   @ApiPropertyOptional({ nullable: true })
   addressLine2!: string | null;
 
-  @ApiProperty()
-  city!: string;
+  @ApiPropertyOptional({ nullable: true })
+  region!: string | null;
+
+  @ApiPropertyOptional({ nullable: true })
+  district!: string | null;
+
+  @ApiPropertyOptional({ nullable: true })
+  ward!: string | null;
+
+  @ApiPropertyOptional({ nullable: true })
+  city!: string | null;
 
   @ApiProperty()
   postalCode!: string;
@@ -104,10 +113,29 @@ export class CreateMerchantDto {
   @Matches(/^[0-9]{4}$/)
   mcc!: string;
 
-  @ApiProperty({ maxLength: 15 })
+  @ApiPropertyOptional()
+  @IsOptional()
   @IsString()
-  @MaxLength(15)
-  city!: string;
+  @MaxLength(100)
+  region?: string;
+
+  @ApiPropertyOptional()
+  @IsOptional()
+  @IsString()
+  @MaxLength(100)
+  district?: string;
+
+  @ApiPropertyOptional()
+  @IsOptional()
+  @IsString()
+  @MaxLength(100)
+  ward?: string;
+
+  @ApiPropertyOptional()
+  @IsOptional()
+  @IsString()
+  @MaxLength(100)
+  city?: string;
 
   @ApiProperty({ pattern: '^[0-9]{5}$' })
   @IsString()
@@ -164,10 +192,28 @@ export class UpdateMerchantDto {
   @IsString()
   taxId?: string;
 
-  @ApiPropertyOptional({ maxLength: 15 })
+  @ApiPropertyOptional()
   @IsOptional()
   @IsString()
-  @MaxLength(15)
+  @MaxLength(100)
+  region?: string;
+
+  @ApiPropertyOptional()
+  @IsOptional()
+  @IsString()
+  @MaxLength(100)
+  district?: string;
+
+  @ApiPropertyOptional()
+  @IsOptional()
+  @IsString()
+  @MaxLength(100)
+  ward?: string;
+
+  @ApiPropertyOptional()
+  @IsOptional()
+  @IsString()
+  @MaxLength(100)
   city?: string;
 
   @ApiPropertyOptional({ pattern: '^[0-9]{5}$' })

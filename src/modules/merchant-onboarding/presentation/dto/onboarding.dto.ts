@@ -37,10 +37,29 @@ export class CreateOnboardingApplicationDto {
   @Matches(/^[0-9]{4}$/)
   mcc!: string;
 
-  @ApiProperty()
+  @ApiPropertyOptional()
+  @IsOptional()
   @IsString()
-  @MaxLength(15)
-  city!: string;
+  @MaxLength(100)
+  region?: string;
+
+  @ApiPropertyOptional()
+  @IsOptional()
+  @IsString()
+  @MaxLength(100)
+  district?: string;
+
+  @ApiPropertyOptional()
+  @IsOptional()
+  @IsString()
+  @MaxLength(100)
+  ward?: string;
+
+  @ApiPropertyOptional()
+  @IsOptional()
+  @IsString()
+  @MaxLength(100)
+  city?: string;
 
   @ApiProperty({ pattern: '^[0-9]{5}$' })
   @IsString()
@@ -109,7 +128,25 @@ export class UpdateOnboardingApplicationDto {
   @ApiPropertyOptional()
   @IsOptional()
   @IsString()
-  @MaxLength(15)
+  @MaxLength(100)
+  region?: string;
+
+  @ApiPropertyOptional()
+  @IsOptional()
+  @IsString()
+  @MaxLength(100)
+  district?: string;
+
+  @ApiPropertyOptional()
+  @IsOptional()
+  @IsString()
+  @MaxLength(100)
+  ward?: string;
+
+  @ApiPropertyOptional()
+  @IsOptional()
+  @IsString()
+  @MaxLength(100)
   city?: string;
 
   @ApiPropertyOptional()

@@ -433,7 +433,10 @@ model MerchantProfile {
   merchantId    String   @id @map("merchant_id") @db.Uuid
   addressLine1  String?  @map("address_line1") @db.VarChar(255)
   addressLine2  String?  @map("address_line2") @db.VarChar(255)
-  city          String   @db.VarChar(15)
+  region        String?  @db.VarChar(100)
+  district      String?  @db.VarChar(100)
+  ward          String?  @db.VarChar(100)
+  city          String?  @db.VarChar(100)
   postalCode    String   @map("postal_code") @db.Char(5)
   countryCode   String   @default("TZ") @map("country_code") @db.Char(2)
   contactPhone  String?  @map("contact_phone") @db.VarChar(20)

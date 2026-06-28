@@ -62,9 +62,12 @@ jobs:
           key: ${{ secrets.HETZNER_SSH_KEY }}
           script: |
             cd ${{ steps.vars.outputs.deploy_path }}
-            npm ci --omit=dev
-            npx prisma generate
-            npx prisma migrate deploy
+            npm install
+            ./node_modules/.bin/prisma generate
+            ./node_modules/.bin/prisma migrate deploy
+            TS_NODE_COMPILER_OPTIONS='{"module":"CommonJS","moduleResolution":"node"}' \
+              ./node_modules/.bin/ts-node --transpile-only prisma/seed.ts
+            npm prune --omit=dev
             pm2 restart ${{ steps.vars.outputs.pm2_app }} \
               || pm2 start dist/main.js \
                   --name ${{ steps.vars.outputs.pm2_app }}

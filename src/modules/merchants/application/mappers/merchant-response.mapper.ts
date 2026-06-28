@@ -3,7 +3,10 @@ import { MerchantWithRelations } from '../../infrastructure/persistence/merchant
 export interface MerchantProfileDto {
   addressLine1: string | null;
   addressLine2: string | null;
-  city: string;
+  region: string | null;
+  district: string | null;
+  ward: string | null;
+  city: string | null;
   postalCode: string;
   countryCode: string;
   contactPhone: string | null;
@@ -57,6 +60,9 @@ export function toMerchantResponse(
       ? {
           addressLine1: merchant.profile.addressLine1,
           addressLine2: merchant.profile.addressLine2,
+          region: merchant.profile.region,
+          district: merchant.profile.district,
+          ward: merchant.profile.ward,
           city: merchant.profile.city,
           postalCode: merchant.profile.postalCode,
           countryCode: merchant.profile.countryCode,

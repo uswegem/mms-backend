@@ -79,7 +79,10 @@ export class MerchantsRepository {
     taxId?: string;
     isSchool?: boolean;
     createdBy: string;
-    city: string;
+    region?: string;
+    district?: string;
+    ward?: string;
+    city?: string;
     postalCode: string;
     addressLine1?: string;
     addressLine2?: string;
@@ -100,6 +103,9 @@ export class MerchantsRepository {
             createdBy: data.createdBy,
             profile: {
               create: {
+                region: data.region,
+                district: data.district,
+                ward: data.ward,
                 city: data.city,
                 postalCode: data.postalCode,
                 addressLine1: data.addressLine1,
@@ -122,6 +128,9 @@ export class MerchantsRepository {
       tradingName?: string;
       mcc?: string;
       taxId?: string;
+      region?: string;
+      district?: string;
+      ward?: string;
       city?: string;
       postalCode?: string;
       addressLine1?: string;
@@ -134,6 +143,9 @@ export class MerchantsRepository {
     return this.prisma.$transaction(
       async (tx) => {
         if (
+          data.region !== undefined ||
+          data.district !== undefined ||
+          data.ward !== undefined ||
           data.city !== undefined ||
           data.postalCode !== undefined ||
           data.addressLine1 !== undefined ||
@@ -144,6 +156,9 @@ export class MerchantsRepository {
           await tx.merchantProfile.upsert({
             where: { merchantId: id },
             update: {
+              ...(data.region !== undefined ? { region: data.region } : {}),
+              ...(data.district !== undefined ? { district: data.district } : {}),
+              ...(data.ward !== undefined ? { ward: data.ward } : {}),
               ...(data.city !== undefined ? { city: data.city } : {}),
               ...(data.postalCode !== undefined
                 ? { postalCode: data.postalCode }
@@ -163,8 +178,11 @@ export class MerchantsRepository {
             },
             create: {
               merchantId: id,
-              city: data.city ?? 'Dar es Salaam',
-              postalCode: data.postalCode ?? '11000',
+              region: data.region,
+              district: data.district,
+              ward: data.ward,
+              city: data.city,
+              postalCode: data.postalCode ?? '00000',
               addressLine1: data.addressLine1,
               addressLine2: data.addressLine2,
               contactPhone: data.contactPhone,
