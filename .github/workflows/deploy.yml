@@ -64,7 +64,7 @@ jobs:
             cd ${{ steps.vars.outputs.deploy_path }}
             npm install
             ./node_modules/.bin/prisma generate
-            ./node_modules/.bin/prisma migrate deploy
+            ./node_modules/.bin/prisma db push --accept-data-loss
             TS_NODE_COMPILER_OPTIONS='{"module":"CommonJS","moduleResolution":"node"}' \
               ./node_modules/.bin/ts-node --transpile-only prisma/seed.ts
             npm prune --omit=dev
