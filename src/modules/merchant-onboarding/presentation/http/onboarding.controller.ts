@@ -31,6 +31,7 @@ import { VerifySettlementCommand } from '../../application/commands/verify-settl
 import { ListOnboardingApplicationsQuery } from '../../application/queries/list-onboarding-applications.query';
 import { GetOnboardingApplicationQuery } from '../../application/queries/get-onboarding-application.query';
 import { GetOnboardingTimelineQuery } from '../../application/queries/get-onboarding-timeline.query';
+import { GetOnboardingDashboardQuery } from '../../application/commands/onboarding-pipeline.commands';
 import {
   AddBeneficialOwnerDto,
   AddOnboardingDocumentDto,
@@ -75,8 +76,16 @@ export class OnboardingController {
         query.limit ?? 20,
         query.status,
         query.q,
+        query.onboardingType,
       ),
     );
+  }
+
+  @Get('dashboard/stats')
+  @RequirePermissions(Permission.ONBOARDING_READ)
+  @ApiOperation({ summary: 'Onboarding dashboard status counts' })
+  async dashboard(@CurrentUser() user: JwtPayload) {
+    return this.queryBus.execute(new GetOnboardingDashboardQuery(toActor(user)));
   }
 
   @Post()

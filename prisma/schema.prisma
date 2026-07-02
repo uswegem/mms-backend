@@ -69,11 +69,89 @@ enum KycStatus {
 enum OnboardingStatus {
   DRAFT
   SUBMITTED
+  PENDING_KYC_DOCUMENTS
+  PENDING_KYC_APPROVAL
+  KYC_REJECTED
+  PENDING_RISK_REVIEW
+  RISK_REJECTED
+  PENDING_BANK_VALIDATION
+  BANK_VALIDATION_FAILED
+  BANK_VALIDATED
+  PENDING_TPS_REGISTRATION
+  TPS_REGISTRATION_FAILED
+  TPS_REGISTERED
+  PENDING_ALIAS_QR_SETUP
+  ALIAS_QR_FAILED
+  ALIAS_QR_REGISTERED
+  PENDING_SETTLEMENT_SETUP
+  SETTLEMENT_APPROVAL_PENDING
+  SETTLEMENT_REJECTED
+  SETTLEMENT_APPROVED
+  READY_FOR_ACTIVATION
+  ACTIVE
+  REJECTED
+  SUSPENDED
+  FAILED
   UNDER_REVIEW
+  APPROVED
+
+  @@map("onboarding_status")
+}
+
+enum DocumentVerificationStatus {
+  PENDING
+  UPLOADED
+  VERIFIED
+  REJECTED
+
+  @@map("document_verification_status")
+}
+
+enum IntegrationType {
+  TPS
+  CFS
+  CBS
+  UPI
+  QR
+  SETTLEMENT
+
+  @@map("integration_type")
+}
+
+enum IntegrationStatus {
+  PENDING
+  SUCCESS
+  FAILED
+  RETRYING
+
+  @@map("integration_status")
+}
+
+enum RiskReviewStatus {
+  PENDING
+  APPROVED
+  REJECTED
+  SENT_BACK
+
+  @@map("risk_review_status")
+}
+
+enum StoreStatus {
+  PENDING
+  ACTIVE
+  FAILED
+  INACTIVE
+
+  @@map("store_status")
+}
+
+enum SettlementApprovalStatus {
+  DRAFT
+  PENDING
   APPROVED
   REJECTED
 
-  @@map("onboarding_status")
+  @@map("settlement_approval_status")
 }
 
 enum LegalEntityType {
@@ -361,13 +439,25 @@ model UserRole {
 model Merchant {
   id          String         @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
   acquirerId  String         @map("acquirer_id") @db.Uuid
+  merchantCode String?       @unique @map("merchant_code") @db.VarChar(30)
   legalName   String         @map("legal_name") @db.VarChar(255)
   tradingName String         @map("trading_name") @db.VarChar(100)
+  displayName String?        @map("display_name") @db.VarChar(100)
   status      MerchantStatus @default(DRAFT)
   mcc         String         @default("0000") @db.Char(4)
+  businessCategory String?   @map("business_category") @db.VarChar(100)
   taxId       String?        @map("tax_id") @db.VarChar(50)
+  vrn         String?        @db.VarChar(20)
+  licenseNumber String?      @map("license_number") @db.VarChar(50)
+  pan         String?        @db.VarChar(20)
+  gstin       String?        @db.VarChar(20)
+  contactPerson String?      @map("contact_person") @db.VarChar(255)
+  relationshipManager String? @map("relationship_manager") @db.VarChar(100)
+  branch      String?        @db.VarChar(100)
+  sourceChannel String?      @map("source_channel") @db.VarChar(50)
   isSchool    Boolean        @default(false) @map("is_school")
   onboardedAt DateTime?      @map("onboarded_at") @db.Timestamptz(6)
+  activatedAt DateTime?      @map("activated_at") @db.Timestamptz(6)
   createdAt   DateTime       @default(now()) @map("created_at") @db.Timestamptz(6)
   updatedAt   DateTime       @default(now()) @updatedAt @map("updated_at") @db.Timestamptz(6)
   createdBy   String?        @map("created_by") @db.Uuid
@@ -392,9 +482,16 @@ model Merchant {
   students             Student[]
   studentAliases       StudentAlias[]
   qrCodes              QrCode[]
+  riskReviews          MerchantRiskReview[]
+  integrations         MerchantIntegration[]
+  stores               MerchantStore[]
+  settlementConfig     MerchantSettlementConfig?
+  onboardingAuditLogs  OnboardingAuditLog[]
 
   @@index([acquirerId, status], map: "idx_merchants_acquirer_status")
   @@index([tradingName], map: "idx_merchants_trading_name")
+  @@index([taxId], map: "idx_merchants_tax_id")
+  @@index([vrn], map: "idx_merchants_vrn")
   @@map("merchants")
 }
 
@@ -462,18 +559,22 @@ model MerchantKyc {
 }
 
 model MerchantDocument {
-  id         String       @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  merchantId String       @map("merchant_id") @db.Uuid
-  docType    DocumentType @map("doc_type")
-  fileName   String       @map("file_name") @db.VarChar(255)
-  s3Bucket   String       @map("s3_bucket") @db.VarChar(100)
-  s3Key      String       @map("s3_key") @db.VarChar(500)
-  mimeType   String?      @map("mime_type") @db.VarChar(100)
-  fileSize   BigInt?      @map("file_size")
-  createdAt  DateTime     @default(now()) @map("created_at") @db.Timestamptz(6)
-  createdBy  String?      @map("created_by") @db.Uuid
-  deletedAt  DateTime?    @map("deleted_at") @db.Timestamptz(6)
-  deletedBy  String?      @map("deleted_by") @db.Uuid
+  id                 String                     @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  merchantId         String                     @map("merchant_id") @db.Uuid
+  docType            DocumentType               @map("doc_type")
+  fileName           String                     @map("file_name") @db.VarChar(255)
+  s3Bucket           String                     @map("s3_bucket") @db.VarChar(100)
+  s3Key              String                     @map("s3_key") @db.VarChar(500)
+  mimeType           String?                    @map("mime_type") @db.VarChar(100)
+  fileSize           BigInt?                    @map("file_size")
+  verificationStatus DocumentVerificationStatus @default(PENDING) @map("verification_status")
+  rejectionReason    String?                    @map("rejection_reason") @db.Text
+  verifiedBy         String?                    @map("verified_by") @db.Uuid
+  verifiedAt         DateTime?                  @map("verified_at") @db.Timestamptz(6)
+  createdAt          DateTime                   @default(now()) @map("created_at") @db.Timestamptz(6)
+  createdBy          String?                    @map("created_by") @db.Uuid
+  deletedAt          DateTime?                  @map("deleted_at") @db.Timestamptz(6)
+  deletedBy          String?                    @map("deleted_by") @db.Uuid
 
   merchant      Merchant                  @relation(fields: [merchantId], references: [id], onDelete: Cascade)
   kycSubmissions OnboardingKycSubmission[]
@@ -514,8 +615,10 @@ model OnboardingApplication {
   legalEntityType       LegalEntityType  @default(SOLE_PROPRIETOR) @map("legal_entity_type")
   companyRegistrationNo String?          @map("company_registration_no") @db.VarChar(50)
   status                OnboardingStatus @default(DRAFT)
+  currentStep           String?          @map("current_step") @db.VarChar(50)
   submittedAt           DateTime?        @map("submitted_at") @db.Timestamptz(6)
   approvedAt            DateTime?        @map("approved_at") @db.Timestamptz(6)
+  activatedAt           DateTime?        @map("activated_at") @db.Timestamptz(6)
   rejectedAt            DateTime?        @map("rejected_at") @db.Timestamptz(6)
   rejectionCode         String?          @map("rejection_code") @db.VarChar(30)
   rejectionNotes        String?          @map("rejection_notes") @db.Text
@@ -536,6 +639,9 @@ model OnboardingApplication {
   kycReviews       OnboardingKycReview[]
   beneficialOwners BeneficialOwner[]
   amlResults       AmlScreeningResult[]
+  riskReviews      MerchantRiskReview[]
+  approvals        MerchantOnboardingApproval[]
+  auditLogs        OnboardingAuditLog[]
 
   @@unique([acquirerId, applicationNo])
   @@index([acquirerId, status])
@@ -638,6 +744,9 @@ model CbsAccountVerification {
   merchantId    String   @map("merchant_id") @db.Uuid
   accountNumber String   @map("account_number") @db.VarChar(30)
   result        String   @db.VarChar(20)
+  referenceNo   String?  @map("reference_no") @db.VarChar(100)
+  failureReason String?  @map("failure_reason") @db.Text
+  rawResponse   Json?    @map("raw_response")
   verifiedAt    DateTime @default(now()) @map("verified_at") @db.Timestamptz(6)
   verifiedBy    String?  @map("verified_by") @db.Uuid
 
@@ -645,6 +754,133 @@ model CbsAccountVerification {
 
   @@index([merchantId])
   @@map("cbs_account_verifications")
+}
+
+model MerchantRiskReview {
+  id             String           @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  applicationId  String           @map("application_id") @db.Uuid
+  merchantId     String           @map("merchant_id") @db.Uuid
+  riskScore      Int?             @map("risk_score")
+  riskLevel      String?          @map("risk_level") @db.VarChar(20)
+  duplicateFlag  Boolean          @default(false) @map("duplicate_flag")
+  blacklistFlag  Boolean          @default(false) @map("blacklist_flag")
+  remarks        String?          @db.Text
+  status         RiskReviewStatus @default(PENDING)
+  reviewedBy     String?          @map("reviewed_by") @db.Uuid
+  reviewedAt     DateTime?        @map("reviewed_at") @db.Timestamptz(6)
+  createdAt      DateTime         @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  application OnboardingApplication @relation(fields: [applicationId], references: [id], onDelete: Cascade)
+  merchant    Merchant              @relation(fields: [merchantId], references: [id], onDelete: Cascade)
+
+  @@index([applicationId])
+  @@index([merchantId])
+  @@map("merchant_risk_reviews")
+}
+
+model MerchantIntegration {
+  id                  String            @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  merchantId          String            @map("merchant_id") @db.Uuid
+  integrationType     IntegrationType   @map("integration_type")
+  externalReferenceId String?           @map("external_reference_id") @db.VarChar(100)
+  idempotencyKey      String?           @map("idempotency_key") @db.VarChar(100)
+  requestPayload      Json?             @map("request_payload")
+  responsePayload     Json?             @map("response_payload")
+  status              IntegrationStatus @default(PENDING)
+  failureReason       String?           @map("failure_reason") @db.Text
+  retryCount          Int               @default(0) @map("retry_count")
+  lastTriedAt         DateTime?         @map("last_tried_at") @db.Timestamptz(6)
+  createdAt           DateTime          @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt           DateTime          @default(now()) @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  merchant Merchant @relation(fields: [merchantId], references: [id], onDelete: Cascade)
+
+  @@unique([merchantId, integrationType, idempotencyKey])
+  @@index([merchantId, integrationType])
+  @@map("merchant_integrations")
+}
+
+model MerchantStore {
+  id         String      @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  merchantId String      @map("merchant_id") @db.Uuid
+  storeName  String      @map("store_name") @db.VarChar(255)
+  storeCode  String      @map("store_code") @db.VarChar(50)
+  terminalId String?     @map("terminal_id") @db.VarChar(50)
+  alias      String?     @db.VarChar(20)
+  upiHandle  String?     @map("upi_handle") @db.VarChar(100)
+  qrString   String?     @map("qr_string") @db.Text
+  qrImageUrl String?     @map("qr_image_url") @db.VarChar(500)
+  status     StoreStatus @default(PENDING)
+  createdAt  DateTime    @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt  DateTime    @default(now()) @updatedAt @map("updated_at") @db.Timestamptz(6)
+  createdBy  String?     @map("created_by") @db.Uuid
+
+  merchant Merchant @relation(fields: [merchantId], references: [id], onDelete: Cascade)
+
+  @@unique([merchantId, storeCode])
+  @@index([merchantId])
+  @@map("merchant_stores")
+}
+
+model MerchantSettlementConfig {
+  id                  String                   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  merchantId          String                   @unique @map("merchant_id") @db.Uuid
+  settlementAlias     String?                  @map("settlement_alias") @db.VarChar(50)
+  settlementAccountId String?                  @map("settlement_account_id") @db.Uuid
+  payoutCycle         String?                  @map("payout_cycle") @db.VarChar(30)
+  mdr                 Decimal?                 @db.Decimal(5, 4)
+  charges             Decimal?                 @db.Decimal(10, 2)
+  transactionLimit    Decimal?                 @map("transaction_limit") @db.Decimal(14, 2)
+  dailyLimit          Decimal?                 @map("daily_limit") @db.Decimal(14, 2)
+  approvalStatus      SettlementApprovalStatus @default(DRAFT) @map("approval_status")
+  approvedBy          String?                  @map("approved_by") @db.Uuid
+  approvedAt          DateTime?                @map("approved_at") @db.Timestamptz(6)
+  remarks             String?                  @db.Text
+  externalReferenceId String?                  @map("external_reference_id") @db.VarChar(100)
+  createdAt           DateTime                 @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt           DateTime                 @default(now()) @updatedAt @map("updated_at") @db.Timestamptz(6)
+  createdBy           String?                  @map("created_by") @db.Uuid
+
+  merchant Merchant @relation(fields: [merchantId], references: [id], onDelete: Cascade)
+
+  @@map("merchant_settlement_configs")
+}
+
+model MerchantOnboardingApproval {
+  id             String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  applicationId  String   @map("application_id") @db.Uuid
+  approvalType   String   @map("approval_type") @db.VarChar(50)
+  status         String   @db.VarChar(20)
+  assignedToRole String?  @map("assigned_to_role") @db.VarChar(50)
+  actionBy       String?  @map("action_by") @db.Uuid
+  actionAt       DateTime? @map("action_at") @db.Timestamptz(6)
+  remarks        String?  @db.Text
+  createdAt      DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  application OnboardingApplication @relation(fields: [applicationId], references: [id], onDelete: Cascade)
+
+  @@index([applicationId])
+  @@map("merchant_onboarding_approvals")
+}
+
+model OnboardingAuditLog {
+  id            String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  applicationId String   @map("application_id") @db.Uuid
+  merchantId    String   @map("merchant_id") @db.Uuid
+  action        String   @db.VarChar(100)
+  oldStatus     String?  @map("old_status") @db.VarChar(50)
+  newStatus     String?  @map("new_status") @db.VarChar(50)
+  performedBy   String   @map("performed_by") @db.Uuid
+  performedAt   DateTime @default(now()) @map("performed_at") @db.Timestamptz(6)
+  remarks       String?  @db.Text
+  metadata      Json?
+
+  application OnboardingApplication @relation(fields: [applicationId], references: [id], onDelete: Cascade)
+  merchant    Merchant              @relation(fields: [merchantId], references: [id], onDelete: Cascade)
+
+  @@index([applicationId, performedAt(sort: Desc)])
+  @@index([merchantId, performedAt(sort: Desc)])
+  @@map("onboarding_audit_logs")
 }
 
 model ApprovalPolicy {

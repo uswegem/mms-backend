@@ -7,36 +7,37 @@ export interface ValidationContext {
   docTypes: DocumentType[];
   beneficialOwnerCount: number;
   hasPrimarySettlement: boolean;
-  cbsVerified: boolean;
   amlPassed: boolean;
   profileComplete: boolean;
+  schoolRegistrationNo?: string | null;
+  contactEmail?: string | null;
+  contactPhone?: string | null;
 }
 
 export class OnboardingValidationService {
   static assertCanSubmit(ctx: ValidationContext): void {
     if (!ctx.profileComplete) {
       throw new OnboardingValidationException(
-        'Merchant profile is incomplete (legal name, trading name, city, postal code, MCC required)',
+        'Profile is incomplete (legal name, trading name, city, postal code, MCC required)',
       );
     }
 
-    if (!ctx.docTypes.includes(DocumentType.KYC_ID)) {
+    if (!ctx.contactEmail?.trim() || !ctx.contactPhone?.trim()) {
       throw new OnboardingValidationException(
-        'National ID or passport document (KYC_ID) is required',
+        'Primary contact email and mobile are required before submission',
       );
     }
 
-    if (ctx.legalEntityType === LegalEntityType.COMPANY) {
-      if (!ctx.docTypes.includes(DocumentType.KYC_LICENSE)) {
+    const requiredDocs = this.requiredDocTypes(ctx.legalEntityType, ctx.isSchool);
+    for (const docType of requiredDocs) {
+      if (!ctx.docTypes.includes(docType)) {
         throw new OnboardingValidationException(
-          'Business license (KYC_LICENSE) is required for company registration',
+          `Required document missing: ${docType}`,
         );
       }
-      if (!ctx.docTypes.includes(DocumentType.KYC_TIN)) {
-        throw new OnboardingValidationException(
-          'TIN certificate (KYC_TIN) is required for company registration',
-        );
-      }
+    }
+
+    if (ctx.legalEntityType === LegalEntityType.COMPANY && !ctx.isSchool) {
       if (ctx.beneficialOwnerCount < 1) {
         throw new OnboardingValidationException(
           'At least one beneficial owner is required for company registration',
@@ -44,15 +45,15 @@ export class OnboardingValidationService {
       }
     }
 
-    if (!ctx.hasPrimarySettlement) {
+    if (ctx.isSchool && !ctx.schoolRegistrationNo?.trim()) {
       throw new OnboardingValidationException(
-        'Primary settlement account must be assigned before submission',
+        'School registration number is required before submission',
       );
     }
 
-    if (!ctx.cbsVerified) {
+    if (!ctx.hasPrimarySettlement) {
       throw new OnboardingValidationException(
-        'Settlement account must pass CBS verification before submission',
+        'Primary settlement account must be assigned before submission',
       );
     }
 
@@ -63,7 +64,13 @@ export class OnboardingValidationService {
     }
   }
 
-  static requiredDocTypes(legalEntityType: LegalEntityType): DocumentType[] {
+  static requiredDocTypes(
+    legalEntityType: LegalEntityType,
+    isSchool = false,
+  ): DocumentType[] {
+    if (isSchool) {
+      return [DocumentType.KYC_ID, DocumentType.KYC_LICENSE, DocumentType.KYC_TIN];
+    }
     if (legalEntityType === LegalEntityType.COMPANY) {
       return [DocumentType.KYC_ID, DocumentType.KYC_LICENSE, DocumentType.KYC_TIN];
     }

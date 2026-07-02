@@ -66,12 +66,25 @@ export class CreateOnboardingApplicationDto {
   @Matches(/^[0-9]{5}$/)
   postalCode!: string;
 
-  @ApiPropertyOptional()
+  @ApiPropertyOptional({ description: 'TRA Tax Identification Number (TIN)' })
   @IsOptional()
   @IsString()
+  @MaxLength(20)
   taxId?: string;
 
-  @ApiPropertyOptional()
+  @ApiPropertyOptional({ description: 'VAT Registration Number (VRN)' })
+  @IsOptional()
+  @IsString()
+  @MaxLength(20)
+  vrn?: string;
+
+  @ApiPropertyOptional({ description: 'Business license number' })
+  @IsOptional()
+  @IsString()
+  @MaxLength(50)
+  licenseNumber?: string;
+
+  @ApiPropertyOptional({ description: 'BRELA / business registration number' })
   @IsOptional()
   @IsString()
   companyRegistrationNo?: string;
@@ -119,6 +132,16 @@ export class UpdateOnboardingApplicationDto {
   @IsOptional()
   @IsString()
   taxId?: string;
+
+  @ApiPropertyOptional()
+  @IsOptional()
+  @IsString()
+  vrn?: string;
+
+  @ApiPropertyOptional()
+  @IsOptional()
+  @IsString()
+  licenseNumber?: string;
 
   @ApiPropertyOptional()
   @IsOptional()
@@ -262,6 +285,11 @@ export class ListOnboardingQueryDto extends PaginationQueryDto {
   @IsOptional()
   @IsEnum(OnboardingStatus)
   status?: OnboardingStatus;
+
+  @ApiPropertyOptional({ enum: ['MERCHANT', 'SCHOOL'] })
+  @IsOptional()
+  @IsString()
+  onboardingType?: 'MERCHANT' | 'SCHOOL';
 
   @ApiPropertyOptional()
   @IsOptional()

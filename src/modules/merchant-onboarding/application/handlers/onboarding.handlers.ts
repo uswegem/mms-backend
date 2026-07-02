@@ -3,6 +3,7 @@ import { createCipheriv, randomBytes } from 'crypto';
 import { AuditLogService } from '@infrastructure/audit/services/audit-log.service';
 import { ConfigService } from '@nestjs/config';
 import { OnboardingRepository } from '../../infrastructure/persistence/onboarding.repository';
+import { OnboardingDuplicateService } from '../services/onboarding-duplicate.service';
 import { OnboardingWorkflowService } from '../services/onboarding-workflow.service';
 import { toOnboardingResponse } from '../mappers/onboarding-response.mapper';
 import {
@@ -43,11 +44,21 @@ export class CreateOnboardingApplicationHandler
 {
   constructor(
     private readonly onboarding: OnboardingRepository,
+    private readonly duplicates: OnboardingDuplicateService,
     private readonly audit: AuditLogService,
   ) {}
 
   async execute(command: CreateOnboardingApplicationCommand) {
     const { actor, dto } = command;
+    await this.duplicates.assertNoDuplicates({
+      acquirerId: actor.acquirerId,
+      taxId: dto.taxId,
+      vrn: dto.vrn,
+      businessRegistrationNo: dto.companyRegistrationNo,
+      licenseNumber: dto.licenseNumber,
+      email: dto.contactEmail,
+      mobile: dto.contactPhone,
+    });
     const app = await this.onboarding.createApplication({
       acquirerId: actor.acquirerId,
       legalEntityType: dto.legalEntityType,
@@ -61,6 +72,8 @@ export class CreateOnboardingApplicationHandler
       city: dto.city,
       postalCode: dto.postalCode,
       taxId: dto.taxId,
+      vrn: dto.vrn,
+      licenseNumber: dto.licenseNumber,
       companyRegistrationNo: dto.companyRegistrationNo,
       addressLine1: dto.addressLine1,
       addressLine2: dto.addressLine2,
@@ -206,7 +219,6 @@ export class SubmitOnboardingHandler implements ICommandHandler<SubmitOnboarding
   ) {}
 
   async execute(command: SubmitOnboardingCommand) {
-    await this.workflow.verifySettlement(command.applicationId, command.actor.sub);
     const app = await this.workflow.submitForApproval(
       command.applicationId,
       command.actor.sub,
@@ -299,6 +311,7 @@ export class ListOnboardingApplicationsHandler
       query.q,
       query.page,
       query.limit,
+      query.onboardingType,
     );
     return {
       data: items.map(toOnboardingResponse),

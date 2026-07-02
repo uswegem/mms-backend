@@ -98,6 +98,7 @@ export class ListOnboardingApplicationsQuery {
     public readonly limit: number,
     public readonly status?: OnboardingStatus,
     public readonly q?: string,
+    public readonly onboardingType?: 'MERCHANT' | 'SCHOOL',
   ) {}
 }
 

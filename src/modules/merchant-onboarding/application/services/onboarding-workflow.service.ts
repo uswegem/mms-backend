@@ -17,6 +17,8 @@ import {
   OnboardingNotFoundException,
   OnboardingValidationException,
 } from '../../domain/exceptions/onboarding.exceptions';
+import { OnboardingPipelineService } from './onboarding-pipeline.service';
+import { OnboardingStatusMachine } from '../../domain/services/onboarding-status.machine';
 
 @Injectable()
 export class OnboardingWorkflowService implements OnboardingApprovalPort {
@@ -24,6 +26,7 @@ export class OnboardingWorkflowService implements OnboardingApprovalPort {
     private readonly onboarding: OnboardingRepository,
     private readonly cbs: CbsVerificationService,
     private readonly makerChecker: MakerCheckerService,
+    private readonly pipeline: OnboardingPipelineService,
     @Optional()
     @Inject(SCHOOL_ONBOARDING_COMPLETION_PORT)
     private readonly schoolCompletion?: SchoolOnboardingCompletionPort,
@@ -70,6 +73,11 @@ export class OnboardingWorkflowService implements OnboardingApprovalPort {
           profile?.postalCode &&
           merchant.mcc
         ),
+        schoolRegistrationNo: merchant.isSchool
+          ? await this.onboarding.getSchoolRegistrationNo(merchant.id)
+          : app.companyRegistrationNo,
+        contactEmail: profile?.contactEmail,
+        contactPhone: profile?.contactPhone,
       },
     };
   }
@@ -117,27 +125,9 @@ export class OnboardingWorkflowService implements OnboardingApprovalPort {
   }
 
   async submitForApproval(applicationId: string, actorId: string) {
-    const { app, ctx } = await this.buildValidationContext(applicationId);
-
-    if (app.status !== 'DRAFT' && app.status !== 'REJECTED') {
-      throw new OnboardingValidationException(
-        'Only draft or rejected applications can be submitted',
-      );
-    }
-
-    if (!ctx.amlPassed) {
-      await this.runAmlScreen(applicationId);
-      const refreshed = await this.buildValidationContext(applicationId);
-      OnboardingValidationService.assertCanSubmit(refreshed.ctx);
-    } else {
-      OnboardingValidationService.assertCanSubmit(ctx);
-    }
-
-    if (app.legalEntityType === LegalEntityType.SOLE_PROPRIETOR && ctx.beneficialOwnerCount === 0) {
-      // Sole prop — skip beneficial owners step
-    }
-
-    return this.onboarding.submit(applicationId);
+    const app = await this.onboarding.findById(applicationId);
+    if (!app) throw new OnboardingNotFoundException(applicationId);
+    return this.pipeline.submit(applicationId, actorId, app.acquirerId);
   }
 
   async makerApprove(applicationId: string, makerId: string, acquirerId: string) {
@@ -177,7 +167,7 @@ export class OnboardingWorkflowService implements OnboardingApprovalPort {
   }
 
   async onCheckerApproved(applicationId: string, checkerId: string): Promise<void> {
-    await this.onboarding.checkerApprove(applicationId, checkerId);
+    await this.pipeline.onCheckerApproved(applicationId, checkerId);
   }
 
   async onCheckerRejected(

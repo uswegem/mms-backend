@@ -14,11 +14,24 @@ import { DEFAULT_MERCHANT_STEPS } from '../../domain/constants/onboarding-steps'
 const TX = { maxWait: 10_000, timeout: 30_000 } as const;
 
 const appInclude = {
-  merchant: { include: { profile: true, settlementAccounts: true } },
+  merchant: {
+    include: {
+      profile: true,
+      settlementAccounts: { where: { deletedAt: null } },
+      documents: { where: { deletedAt: null }, orderBy: { createdAt: 'desc' as const } },
+      riskReviews: { orderBy: { createdAt: 'desc' as const }, take: 1 },
+      integrations: { orderBy: { createdAt: 'desc' as const } },
+      stores: true,
+      settlementConfig: true,
+      merchantAlias: true,
+    },
+  },
   steps: true,
   beneficialOwners: { where: { deletedAt: null } },
   amlResults: { orderBy: { screenedAt: 'desc' as const }, take: 1 },
   kycReviews: { orderBy: { reviewedAt: 'desc' as const } },
+  riskReviews: { orderBy: { createdAt: 'desc' as const } },
+  approvals: { orderBy: { createdAt: 'desc' as const } },
 } satisfies Prisma.OnboardingApplicationInclude;
 
 export type OnboardingAppWithRelations = Prisma.OnboardingApplicationGetPayload<{
@@ -43,17 +56,34 @@ export class OnboardingRepository {
     q?: string,
     page = 1,
     limit = 20,
+    onboardingType?: 'MERCHANT' | 'SCHOOL',
   ) {
     const where: Prisma.OnboardingApplicationWhereInput = {
       acquirerId,
       deletedAt: null,
       ...(status ? { status } : {}),
+      ...(onboardingType === 'SCHOOL' ? { merchant: { isSchool: true } } : {}),
+      ...(onboardingType === 'MERCHANT' ? { merchant: { isSchool: false } } : {}),
       ...(q
         ? {
             OR: [
               { applicationNo: { contains: q, mode: 'insensitive' } },
               { merchant: { legalName: { contains: q, mode: 'insensitive' } } },
               { merchant: { tradingName: { contains: q, mode: 'insensitive' } } },
+              { merchant: { merchantCode: { contains: q, mode: 'insensitive' } } },
+              { merchant: { taxId: { contains: q, mode: 'insensitive' } } },
+              { merchant: { vrn: { contains: q, mode: 'insensitive' } } },
+              { merchant: { licenseNumber: { contains: q, mode: 'insensitive' } } },
+              { companyRegistrationNo: { contains: q, mode: 'insensitive' } },
+              { merchant: { profile: { contactEmail: { contains: q, mode: 'insensitive' } } } },
+              { merchant: { profile: { contactPhone: { contains: q, mode: 'insensitive' } } } },
+              { merchant: { settlementAccounts: { some: { accountNumber: { contains: q.replace(/\s/g, '') } } } } },
+              { merchant: { stores: { some: { OR: [
+                { storeCode: { contains: q, mode: 'insensitive' } },
+                { alias: { contains: q, mode: 'insensitive' } },
+                { terminalId: { contains: q, mode: 'insensitive' } },
+              ] } } } },
+              { merchant: { integrations: { some: { externalReferenceId: { contains: q, mode: 'insensitive' } } } } },
             ],
           }
         : {}),
@@ -91,6 +121,13 @@ export class OnboardingRepository {
     city?: string;
     postalCode: string;
     taxId?: string;
+    vrn?: string;
+    licenseNumber?: string;
+    businessCategory?: string;
+    contactPerson?: string;
+    relationshipManager?: string;
+    branch?: string;
+    sourceChannel?: string;
     companyRegistrationNo?: string;
     addressLine1?: string;
     addressLine2?: string;
@@ -106,6 +143,13 @@ export class OnboardingRepository {
           tradingName: data.tradingName,
           mcc: data.mcc,
           taxId: data.taxId,
+          vrn: data.vrn,
+          licenseNumber: data.licenseNumber,
+          businessCategory: data.businessCategory,
+          contactPerson: data.contactPerson,
+          relationshipManager: data.relationshipManager,
+          branch: data.branch,
+          sourceChannel: data.sourceChannel,
           isSchool: data.isSchool,
           status: MerchantStatus.DRAFT,
           createdBy: data.createdBy,
@@ -157,6 +201,8 @@ export class OnboardingRepository {
       tradingName?: string;
       mcc?: string;
       taxId?: string;
+      vrn?: string;
+      licenseNumber?: string;
       companyRegistrationNo?: string;
       region?: string;
       district?: string;
@@ -219,13 +265,15 @@ export class OnboardingRepository {
         });
       }
 
-      if (data.tradingName || data.mcc || data.taxId !== undefined) {
+      if (data.tradingName || data.mcc || data.taxId !== undefined || data.vrn !== undefined || data.licenseNumber !== undefined) {
         await tx.merchant.update({
           where: { id: app.merchantId },
           data: {
             ...(data.tradingName ? { tradingName: data.tradingName } : {}),
             ...(data.mcc ? { mcc: data.mcc } : {}),
             ...(data.taxId !== undefined ? { taxId: data.taxId } : {}),
+            ...(data.vrn !== undefined ? { vrn: data.vrn } : {}),
+            ...(data.licenseNumber !== undefined ? { licenseNumber: data.licenseNumber } : {}),
             updatedBy: data.updatedBy,
           },
         });
@@ -559,5 +607,296 @@ export class OnboardingRepository {
     return this.prisma.beneficialOwner.count({
       where: { applicationId, deletedAt: null },
     });
+  }
+
+  async transitionStatus(
+    applicationId: string,
+    status: OnboardingStatus,
+    actorId: string,
+    options: {
+      action: string;
+      remarks?: string;
+      rejectionCode?: string;
+      currentStep?: string;
+      merchantStatus?: MerchantStatus;
+      kycStatus?: KycStatus;
+      merchantCode?: string;
+      submittedAt?: Date;
+      activatedAt?: Date;
+      onboardedAt?: Date;
+      metadata?: Record<string, unknown>;
+    },
+  ): Promise<OnboardingAppWithRelations> {
+    const current = await this.findById(applicationId);
+    if (!current) throw new Error('NOT_FOUND');
+
+    return this.prisma.$transaction(async (tx) => {
+      await tx.onboardingApplication.update({
+        where: { id: applicationId },
+        data: {
+          status,
+          currentStep: options.currentStep,
+          updatedBy: actorId,
+          ...(options.submittedAt ? { submittedAt: options.submittedAt } : {}),
+          ...(options.activatedAt ? { activatedAt: options.activatedAt } : {}),
+          ...(options.rejectionCode ? { rejectionCode: options.rejectionCode } : {}),
+          ...(options.remarks &&
+          ['REJECTED', 'KYC_REJECTED', 'RISK_REJECTED', 'SETTLEMENT_REJECTED'].includes(status)
+            ? { rejectionNotes: options.remarks, rejectedAt: new Date() }
+            : {}),
+          ...(status === 'ACTIVE' ? { approvedAt: new Date() } : {}),
+        },
+      });
+
+      if (options.merchantStatus || options.merchantCode || options.onboardedAt) {
+        await tx.merchant.update({
+          where: { id: current.merchantId },
+          data: {
+            ...(options.merchantStatus ? { status: options.merchantStatus } : {}),
+            ...(options.merchantCode ? { merchantCode: options.merchantCode } : {}),
+            ...(options.onboardedAt ? { onboardedAt: options.onboardedAt, activatedAt: options.onboardedAt } : {}),
+            updatedBy: actorId,
+          },
+        });
+      }
+
+      if (options.kycStatus) {
+        await tx.merchantKyc.upsert({
+          where: { merchantId: current.merchantId },
+          update: { status: options.kycStatus },
+          create: { merchantId: current.merchantId, status: options.kycStatus },
+        });
+      }
+
+      await tx.onboardingAuditLog.create({
+        data: {
+          applicationId,
+          merchantId: current.merchantId,
+          action: options.action,
+          oldStatus: current.status,
+          newStatus: status,
+          performedBy: actorId,
+          remarks: options.remarks,
+          metadata: options.metadata as Prisma.InputJsonValue | undefined,
+        },
+      });
+
+      return tx.onboardingApplication.findUniqueOrThrow({
+        where: { id: applicationId },
+        include: appInclude,
+      });
+    }, TX);
+  }
+
+  async getStatusCounts(acquirerId: string) {
+    const rows = await this.prisma.onboardingApplication.groupBy({
+      by: ['status'],
+      where: { acquirerId, deletedAt: null },
+      _count: { status: true },
+    });
+    const counts: Record<string, number> = {};
+    for (const row of rows) {
+      counts[row.status] = row._count.status;
+    }
+    return { counts, total: rows.reduce((sum, r) => sum + r._count.status, 0) };
+  }
+
+  async createRiskReview(applicationId: string, merchantId: string, actorId: string) {
+    return this.prisma.merchantRiskReview.create({
+      data: {
+        applicationId,
+        merchantId,
+        riskScore: 25,
+        riskLevel: 'LOW',
+        status: 'PENDING',
+      },
+    });
+  }
+
+  async completeRiskReview(
+    applicationId: string,
+    data: {
+      riskScore?: number;
+      riskLevel?: string;
+      duplicateFlag?: boolean;
+      blacklistFlag?: boolean;
+      remarks?: string;
+      status: 'PENDING' | 'APPROVED' | 'REJECTED' | 'SENT_BACK';
+      reviewedBy: string;
+    },
+  ) {
+    const existing = await this.prisma.merchantRiskReview.findFirst({
+      where: { applicationId },
+      orderBy: { createdAt: 'desc' },
+    });
+    if (existing) {
+      return this.prisma.merchantRiskReview.update({
+        where: { id: existing.id },
+        data: {
+          riskScore: data.riskScore ?? existing.riskScore,
+          riskLevel: data.riskLevel ?? existing.riskLevel,
+          duplicateFlag: data.duplicateFlag ?? existing.duplicateFlag,
+          blacklistFlag: data.blacklistFlag ?? existing.blacklistFlag,
+          remarks: data.remarks,
+          status: data.status,
+          reviewedBy: data.reviewedBy,
+          reviewedAt: new Date(),
+        },
+      });
+    }
+    const app = await this.findById(applicationId);
+    if (!app) throw new Error('NOT_FOUND');
+    return this.prisma.merchantRiskReview.create({
+      data: {
+        applicationId,
+        merchantId: app.merchantId,
+        riskScore: data.riskScore ?? 25,
+        riskLevel: data.riskLevel ?? 'LOW',
+        duplicateFlag: data.duplicateFlag ?? false,
+        blacklistFlag: data.blacklistFlag ?? false,
+        remarks: data.remarks,
+        status: data.status,
+        reviewedBy: data.reviewedBy,
+        reviewedAt: new Date(),
+      },
+    });
+  }
+
+  async recordApproval(
+    applicationId: string,
+    approvalType: string,
+    status: string,
+    actionBy: string,
+    remarks?: string,
+  ) {
+    return this.prisma.merchantOnboardingApproval.create({
+      data: {
+        applicationId,
+        approvalType,
+        status,
+        actionBy,
+        actionAt: new Date(),
+        remarks,
+      },
+    });
+  }
+
+  async upsertSettlementConfig(
+    merchantId: string,
+    data: {
+      settlementAlias?: string;
+      settlementAccountId?: string;
+      payoutCycle?: string;
+      mdr?: number;
+      charges?: number;
+      transactionLimit?: number;
+      dailyLimit?: number;
+      approvalStatus?: 'DRAFT' | 'PENDING' | 'APPROVED' | 'REJECTED';
+      approvedBy?: string;
+      approvedAt?: Date;
+      remarks?: string;
+      createdBy?: string;
+    },
+  ) {
+    return this.prisma.merchantSettlementConfig.upsert({
+      where: { merchantId },
+      create: {
+        merchantId,
+        settlementAlias: data.settlementAlias,
+        settlementAccountId: data.settlementAccountId,
+        payoutCycle: data.payoutCycle,
+        mdr: data.mdr,
+        charges: data.charges,
+        transactionLimit: data.transactionLimit,
+        dailyLimit: data.dailyLimit,
+        approvalStatus: data.approvalStatus ?? 'DRAFT',
+        approvedBy: data.approvedBy,
+        approvedAt: data.approvedAt,
+        remarks: data.remarks,
+        createdBy: data.createdBy,
+      },
+      update: {
+        ...(data.settlementAlias !== undefined ? { settlementAlias: data.settlementAlias } : {}),
+        ...(data.settlementAccountId !== undefined ? { settlementAccountId: data.settlementAccountId } : {}),
+        ...(data.payoutCycle !== undefined ? { payoutCycle: data.payoutCycle } : {}),
+        ...(data.mdr !== undefined ? { mdr: data.mdr } : {}),
+        ...(data.charges !== undefined ? { charges: data.charges } : {}),
+        ...(data.transactionLimit !== undefined ? { transactionLimit: data.transactionLimit } : {}),
+        ...(data.dailyLimit !== undefined ? { dailyLimit: data.dailyLimit } : {}),
+        ...(data.approvalStatus !== undefined ? { approvalStatus: data.approvalStatus } : {}),
+        ...(data.approvedBy !== undefined ? { approvedBy: data.approvedBy } : {}),
+        ...(data.approvedAt !== undefined ? { approvedAt: data.approvedAt } : {}),
+        ...(data.remarks !== undefined ? { remarks: data.remarks } : {}),
+      },
+    });
+  }
+
+  async deleteDocument(documentId: string, merchantId: string, deletedBy: string) {
+    return this.prisma.merchantDocument.update({
+      where: { id: documentId, merchantId },
+      data: { deletedAt: new Date(), deletedBy },
+    });
+  }
+
+  async listAuditLogs(applicationId: string) {
+    return this.prisma.onboardingAuditLog.findMany({
+      where: { applicationId },
+      orderBy: { performedAt: 'desc' },
+    });
+  }
+
+  async bulkCreateStores(
+    merchantId: string,
+    stores: Array<{ storeName: string; storeCode: string }>,
+    actorId: string,
+  ) {
+    const results = [];
+    for (const store of stores) {
+      const created = await this.prisma.merchantStore.upsert({
+        where: { merchantId_storeCode: { merchantId, storeCode: store.storeCode } },
+        create: {
+          merchantId,
+          storeName: store.storeName,
+          storeCode: store.storeCode,
+          status: 'PENDING',
+          createdBy: actorId,
+        },
+        update: { storeName: store.storeName },
+      });
+      results.push(created);
+    }
+    return results;
+  }
+
+  async ensureSchoolRecord(merchantId: string) {
+    const merchant = await this.prisma.merchant.findUnique({
+      where: { id: merchantId },
+      include: { profile: true, school: true },
+    });
+    if (!merchant?.isSchool) return null;
+
+    if (merchant.school) {
+      return merchant.school;
+    }
+
+    return this.prisma.school.create({
+      data: {
+        merchantId,
+        contactPhone: merchant.profile?.contactPhone,
+        contactEmail: merchant.profile?.contactEmail,
+        address: merchant.profile?.addressLine1,
+      },
+    });
+  }
+
+  async getSchoolRegistrationNo(merchantId: string): Promise<string | null> {
+    const school = await this.prisma.school.findUnique({ where: { merchantId } });
+    if (school?.registrationNo) return school.registrationNo;
+    const app = await this.prisma.onboardingApplication.findFirst({
+      where: { merchantId, deletedAt: null },
+      orderBy: { createdAt: 'desc' },
+      select: { companyRegistrationNo: true },
+    });
+    return app?.companyRegistrationNo ?? null;
   }
 }
