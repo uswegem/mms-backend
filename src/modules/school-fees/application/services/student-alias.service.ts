@@ -213,7 +213,7 @@ export class StudentAliasService {
 
     const merchant = await tx.merchant.findUniqueOrThrow({
       where: { id: merchantId },
-      include: { profile: true },
+      include: { profile: true, acquirer: true },
     });
 
     const qr = await this.qr.createStaticQr({
@@ -224,6 +224,7 @@ export class StudentAliasService {
       postalCode: merchant.profile?.postalCode ?? '11000',
       mcc: merchant.mcc,
       publicAlias: generated.alias8digit,
+      acquirerId5: merchant.acquirer.tipsAcquirerId5 ?? undefined,
       internalRoutingId: internalId8digit,
       createdBy: actorId,
     }, tx);

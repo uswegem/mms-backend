@@ -35,6 +35,10 @@ export default () => ({
   audit: {
     enabled: process.env.AUDIT_ENABLED !== 'false',
   },
+  qr: {
+    storagePath: process.env.QR_STORAGE_PATH ?? 'storage',
+    storageBucket: process.env.QR_STORAGE_BUCKET ?? 'local',
+  },
   auth: {
     maxFailedAttempts: parseInt(process.env.AUTH_MAX_FAILED_ATTEMPTS ?? '5', 10),
     lockoutDurationMinutes: parseInt(

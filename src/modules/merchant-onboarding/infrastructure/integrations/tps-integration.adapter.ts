@@ -56,26 +56,28 @@ export class TpsIntegrationAdapter {
     };
 
     const simulateFail =
+      request.tradingName.toUpperCase().includes('TIPS_FAIL') ||
       request.tradingName.toUpperCase().includes('TPS_FAIL') ||
+      request.legalName.toUpperCase().includes('TIPS_FAIL') ||
       request.legalName.toUpperCase().includes('TPS_FAIL');
 
-    const tpsMerchantId = simulateFail
+    const tipsMerchantId = simulateFail
       ? undefined
-      : `TPS-${request.merchantId.slice(0, 8).toUpperCase()}-${Date.now().toString(36).toUpperCase()}`;
+      : `TIPS-${request.merchantId.slice(0, 8).toUpperCase()}-${Date.now().toString(36).toUpperCase()}`;
 
     const result: TpsRegistrationResult = simulateFail
       ? {
           success: false,
-          failureReason: 'TPS directory registration rejected (simulated)',
-          responsePayload: { code: 'TPS_REJECTED', simulated: true },
+          failureReason: 'TIPS directory registration rejected (simulated)',
+          responsePayload: { code: 'TIPS_REJECTED', simulated: true },
         }
       : {
           success: true,
-          tpsMerchantId,
-          referenceId: tpsMerchantId,
+          tpsMerchantId: tipsMerchantId,
+          referenceId: tipsMerchantId,
           responsePayload: {
-            code: 'TPS_REGISTERED',
-            tpsMerchantId,
+            code: 'TIPS_REGISTERED',
+            tipsMerchantId,
             simulated: true,
           },
         };
@@ -92,7 +94,7 @@ export class TpsIntegrationAdapter {
         merchantId: request.merchantId,
         integrationType: IntegrationType.TPS,
         idempotencyKey,
-        externalReferenceId: tpsMerchantId,
+        externalReferenceId: tipsMerchantId,
         requestPayload,
         responsePayload: result.responsePayload as Prisma.InputJsonValue,
         status: result.success ? IntegrationStatus.SUCCESS : IntegrationStatus.FAILED,
@@ -101,7 +103,7 @@ export class TpsIntegrationAdapter {
         lastTriedAt: new Date(),
       },
       update: {
-        externalReferenceId: tpsMerchantId,
+        externalReferenceId: tipsMerchantId,
         requestPayload,
         responsePayload: result.responsePayload as Prisma.InputJsonValue,
         status: result.success ? IntegrationStatus.SUCCESS : IntegrationStatus.FAILED,

@@ -226,6 +226,14 @@ enum QrStatus {
   @@map("qr_status")
 }
 
+enum TipsRegistrationStatus {
+  PENDING
+  REGISTERED
+  FAILED
+
+  @@map("tips_registration_status")
+}
+
 model Acquirer {
   id                  String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
   code                String    @unique @db.VarChar(20)
@@ -482,6 +490,7 @@ model Merchant {
   students             Student[]
   studentAliases       StudentAlias[]
   qrCodes              QrCode[]
+  tipsRegistration     TipsRegistration?
   riskReviews          MerchantRiskReview[]
   integrations         MerchantIntegration[]
   stores               MerchantStore[]
@@ -1027,10 +1036,30 @@ model StudentAlias {
   @@map("student_aliases")
 }
 
+model TipsRegistration {
+  id               String                 @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  merchantId       String                 @unique @map("merchant_id") @db.Uuid
+  domainName       String                 @default("tz.go.bot.tips") @map("domain_name") @db.VarChar(14)
+  acquirerId5      String                 @map("acquirer_id_5") @db.Char(5)
+  merchantId15     String                 @map("merchant_id_15") @db.VarChar(15)
+  status           TipsRegistrationStatus @default(PENDING)
+  tipsDirectoryRef String?                @map("tips_directory_ref") @db.VarChar(100)
+  registeredAt     DateTime?              @map("registered_at") @db.Timestamptz(6)
+  lastSyncAt       DateTime?              @map("last_sync_at") @db.Timestamptz(6)
+  createdAt        DateTime               @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt        DateTime               @default(now()) @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  merchant Merchant @relation(fields: [merchantId], references: [id], onDelete: Cascade)
+
+  @@map("tips_registrations")
+}
+
 model QrCode {
   id             String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
   merchantId     String    @map("merchant_id") @db.Uuid
   studentId      String?   @map("student_id") @db.Uuid
+  storeId        String?   @map("store_id") @db.Uuid
+  terminalId     String?   @map("terminal_id") @db.Uuid
   qrType         QrType    @map("qr_type")
   status         QrStatus  @default(ACTIVE)
   poiMethod      String    @map("poi_method") @db.Char(2)
@@ -1041,12 +1070,14 @@ model QrCode {
   updatedAt      DateTime  @default(now()) @updatedAt @map("updated_at") @db.Timestamptz(6)
   createdBy      String?   @map("created_by") @db.Uuid
 
-  merchant       Merchant           @relation(fields: [merchantId], references: [id], onDelete: Cascade)
-  student        Student?           @relation(fields: [studentId], references: [id])
+  merchant        Merchant           @relation(fields: [merchantId], references: [id], onDelete: Cascade)
+  student         Student?           @relation(fields: [studentId], references: [id])
   payloadVersions QrPayloadVersion[]
-  studentAliases StudentAlias[]
+  renderAssets    QrRenderAsset[]
+  studentAliases  StudentAlias[]
 
   @@index([merchantId, status])
+  @@index([merchantId, qrType, status, storeId, terminalId])
   @@map("qr_codes")
 }
 
@@ -1060,12 +1091,35 @@ model QrPayloadVersion {
   tag62InternalId String?  @map("tag_62_05_internal_id") @db.VarChar(8)
   amount          Decimal? @db.Decimal(18, 2)
   billNumber      String?  @map("bill_number") @db.VarChar(25)
+  referenceLabel  String?  @map("reference_label") @db.VarChar(25)
   createdAt       DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
 
-  qrCode QrCode @relation(fields: [qrId], references: [id], onDelete: Cascade)
+  qrCode        QrCode          @relation(fields: [qrId], references: [id], onDelete: Cascade)
+  renderAssets  QrRenderAsset[]
 
   @@unique([qrId, version])
   @@map("qr_payload_versions")
+}
+
+model QrRenderAsset {
+  id               String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  qrId             String   @map("qr_id") @db.Uuid
+  payloadVersionId String?  @map("payload_version_id") @db.Uuid
+  format           String   @db.VarChar(10)
+  s3Bucket         String   @map("s3_bucket") @db.VarChar(100)
+  s3Key            String   @map("s3_key") @db.VarChar(500)
+  fileHash         String?  @map("file_hash") @db.VarChar(64)
+  width            Int?
+  height           Int?
+  sizeBytes        BigInt?  @map("size_bytes")
+  templateId       String?  @map("template_id") @db.Uuid
+  createdAt        DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  qrCode         QrCode            @relation(fields: [qrId], references: [id], onDelete: Cascade)
+  payloadVersion QrPayloadVersion? @relation(fields: [payloadVersionId], references: [id], onDelete: SetNull)
+
+  @@index([qrId])
+  @@map("qr_render_assets")
 }
 
 model Payment {

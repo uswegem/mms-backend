@@ -1,0 +1,514 @@
+import {
+  BadRequestException,
+  Injectable,
+  NotFoundException,
+} from '@nestjs/common';
+import { QrStatus, QrType } from '@prisma/client';
+import { AuditLogService } from '@infrastructure/audit/services/audit-log.service';
+import { Permission } from '@infrastructure/auth/rbac/enums/permission.enum';
+import { PrismaService } from '@infrastructure/database/prisma/prisma.service';
+import { ActorContext } from '@shared/application/interfaces/actor-context.interface';
+import { MerchantScopeService } from '@modules/merchants/application/services/merchant-scope.service';
+import { buildTanqrPayload } from '../../domain/tanqr-payload.builder';
+import { QrRepository } from '../../infrastructure/persistence/qr.repository';
+import { QrValidators } from '../../validators/qr.validators';
+import { QrRendererService } from './qr-renderer.service';
+import { QrStorageService } from './qr-storage.service';
+
+export interface QrAssetMap {
+  png?: string;
+  svg?: string;
+}
+
+export interface StaticQrResult {
+  success: true;
+  qr_id: string;
+  qr_type: 'static';
+  poi_method: '11';
+  status: string;
+  version: number;
+  merchant_id: string;
+  alias: string;
+  tlv_payload: string;
+  crc: string;
+  assets: QrAssetMap;
+  regenerated?: boolean;
+}
+
+export interface DynamicQrResult {
+  success: true;
+  qr_id: string;
+  qr_type: 'dynamic';
+  poi_method: '12';
+  status: string;
+  version: number;
+  merchant_id: string;
+  alias: string;
+  amount: string;
+  bill_number?: string;
+  reference_label?: string;
+  expires_at: string;
+  tlv_payload: string;
+  crc: string;
+  assets: QrAssetMap;
+}
+
+@Injectable()
+export class QrService {
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly repository: QrRepository,
+    private readonly validators: QrValidators,
+    private readonly renderer: QrRendererService,
+    private readonly storage: QrStorageService,
+    private readonly audit: AuditLogService,
+    private readonly scope: MerchantScopeService,
+  ) {}
+
+  async generateStatic(
+    merchantId: string,
+    actor: ActorContext,
+    options: {
+      storeId?: string;
+      terminalId?: string;
+      purpose?: string;
+      forceRegenerate?: boolean;
+      storeLabel?: string;
+      terminalLabel?: string;
+      referenceLabel?: string;
+      internalRoutingId?: string;
+      studentId?: string;
+    } = {},
+  ): Promise<StaticQrResult> {
+    this.scope.requirePermission(actor, Permission.QR_GENERATE);
+    const ctx = await this.validators.validateMerchantForQr(merchantId);
+    this.scope.assertCanAccessMerchant(actor, {
+      id: ctx.merchant.id,
+      acquirerId: ctx.merchant.acquirerId,
+    });
+
+    await this.assertStore(merchantId, options.storeId);
+
+    let storeLabel = options.storeLabel;
+    let terminalLabel = options.terminalLabel;
+    if (options.storeId) {
+      const store = await this.prisma.merchantStore.findFirst({
+        where: { id: options.storeId, merchantId },
+      });
+      if (store) {
+        storeLabel = storeLabel ?? store.storeCode;
+        terminalLabel = terminalLabel ?? store.terminalId ?? undefined;
+      }
+    }
+    const existing = await this.repository.findActiveStaticQr(
+      merchantId,
+      options.storeId,
+      options.terminalId,
+    );
+
+    if (existing && !options.forceRegenerate) {
+      return this.toStaticResponse(existing, ctx.alias, false);
+    }
+
+    const mcc = this.validators.validateMcc(ctx.merchant.mcc);
+    const merchantName = this.validators.sanitizeMerchantName(ctx.merchant.tradingName);
+    const city = this.validators.sanitizeCity(ctx.profile.city);
+    const postalCode = this.validators.validatePostalCode(ctx.profile.postalCode);
+
+    const referenceLabel =
+      options.referenceLabel ?? options.internalRoutingId ?? undefined;
+
+    const { tlvPayload, crcValue } = buildTanqrPayload({
+      poiMethod: '11',
+      acquirerId5: ctx.acquirerId5,
+      publicAlias: ctx.alias,
+      mcc,
+      merchantName,
+      city,
+      postalCode,
+      additionalData: {
+        storeLabel,
+        terminalLabel,
+        referenceLabel,
+      },
+    });
+
+    const isRegenerate = Boolean(existing && options.forceRegenerate);
+    const version = isRegenerate ? existing!.currentVersion + 1 : 1;
+
+    const qrRecord = await this.repository.persistQrGeneration({
+      merchantId,
+      studentId: options.studentId,
+      storeId: options.storeId,
+      terminalId: options.terminalId,
+      qrType: QrType.STATIC,
+      poiMethod: '11',
+      createdBy: actor.sub,
+      existingQrId: isRegenerate ? existing!.id : undefined,
+      version,
+      tlvPayload,
+      crcValue,
+      tag26Alias: ctx.alias,
+      tag62InternalId: referenceLabel,
+      purpose: options.purpose,
+    });
+
+    const assets = await this.renderAndStore(
+      tlvPayload,
+      merchantId,
+      qrRecord.id,
+      version,
+      qrRecord.payloadVersionId,
+    );
+
+    await this.audit.record({
+      actorId: actor.sub,
+      action: isRegenerate ? 'QR_REGENERATED' : 'QR_STATIC_CREATED',
+      entityType: 'qr_code',
+      entityId: qrRecord.id,
+      metadata: {
+        merchantId,
+        version,
+        storeId: options.storeId ?? null,
+        terminalId: options.terminalId ?? null,
+        purpose: options.purpose ?? null,
+      },
+    });
+
+    return {
+      success: true,
+      qr_id: qrRecord.id,
+      qr_type: 'static',
+      poi_method: '11',
+      status: qrRecord.status.toLowerCase(),
+      version,
+      merchant_id: merchantId,
+      alias: ctx.alias,
+      tlv_payload: tlvPayload,
+      crc: crcValue,
+      assets,
+      regenerated: isRegenerate,
+    };
+  }
+
+  async generateDynamic(
+    merchantId: string,
+    actor: ActorContext,
+    options: {
+      amount: string | number;
+      billNumber?: string;
+      referenceLabel?: string;
+      storeId?: string;
+      terminalId?: string;
+      expiresInMinutes?: number;
+      storeLabel?: string;
+      terminalLabel?: string;
+      internalRoutingId?: string;
+    },
+  ): Promise<DynamicQrResult> {
+    this.scope.requirePermission(actor, Permission.QR_GENERATE);
+    const ctx = await this.validators.validateMerchantForQr(merchantId);
+    this.scope.assertCanAccessMerchant(actor, {
+      id: ctx.merchant.id,
+      acquirerId: ctx.merchant.acquirerId,
+    });
+
+    await this.assertStore(merchantId, options.storeId);
+
+    const amount = this.validators.validateAmount(options.amount);
+    const mcc = this.validators.validateMcc(ctx.merchant.mcc);
+    const merchantName = this.validators.sanitizeMerchantName(ctx.merchant.tradingName);
+    const city = this.validators.sanitizeCity(ctx.profile.city);
+    const postalCode = this.validators.validatePostalCode(ctx.profile.postalCode);
+
+    const referenceLabel =
+      options.referenceLabel ?? options.internalRoutingId ?? undefined;
+
+    const { tlvPayload, crcValue } = buildTanqrPayload({
+      poiMethod: '12',
+      acquirerId5: ctx.acquirerId5,
+      publicAlias: ctx.alias,
+      mcc,
+      merchantName,
+      city,
+      postalCode,
+      amount,
+      additionalData: {
+        billNumber: options.billNumber,
+        storeLabel: options.storeLabel,
+        terminalLabel: options.terminalLabel,
+        referenceLabel,
+      },
+    });
+
+    const expiresIn = options.expiresInMinutes ?? 30;
+    if (expiresIn <= 0) {
+      throw new BadRequestException('expires_in_minutes must be positive');
+    }
+    const expiresAt = new Date(Date.now() + expiresIn * 60_000);
+
+    const qrRecord = await this.repository.persistQrGeneration({
+      merchantId,
+      storeId: options.storeId,
+      terminalId: options.terminalId,
+      qrType: QrType.DYNAMIC,
+      poiMethod: '12',
+      createdBy: actor.sub,
+      version: 1,
+      tlvPayload,
+      crcValue,
+      tag26Alias: ctx.alias,
+      tag62InternalId: referenceLabel,
+      amount,
+      billNumber: options.billNumber,
+      referenceLabel,
+      expiresAt,
+    });
+
+    const assets = await this.renderAndStore(
+      tlvPayload,
+      merchantId,
+      qrRecord.id,
+      1,
+      qrRecord.payloadVersionId,
+    );
+
+    await this.audit.record({
+      actorId: actor.sub,
+      action: 'QR_DYNAMIC_CREATED',
+      entityType: 'qr_code',
+      entityId: qrRecord.id,
+      metadata: {
+        merchantId,
+        amount,
+        billNumber: options.billNumber ?? null,
+        expiresAt: expiresAt.toISOString(),
+      },
+    });
+
+    return {
+      success: true,
+      qr_id: qrRecord.id,
+      qr_type: 'dynamic',
+      poi_method: '12',
+      status: qrRecord.status.toLowerCase(),
+      version: 1,
+      merchant_id: merchantId,
+      alias: ctx.alias,
+      amount,
+      bill_number: options.billNumber,
+      reference_label: referenceLabel,
+      expires_at: expiresAt.toISOString(),
+      tlv_payload: tlvPayload,
+      crc: crcValue,
+      assets,
+    };
+  }
+
+  private async renderAndStore(
+    tlvPayload: string,
+    merchantId: string,
+    qrId: string,
+    version: number,
+    payloadVersionId: string,
+  ): Promise<QrAssetMap> {
+    const rendered = await this.renderer.renderAll(tlvPayload);
+    const stored = await this.storage.saveRenderedAssets(
+      merchantId,
+      qrId,
+      version,
+      rendered,
+    );
+    await this.repository.saveRenderAssets(qrId, payloadVersionId, stored, this.storage.getBucket());
+    const map: QrAssetMap = {};
+    for (const asset of stored) {
+      map[asset.format] = asset.publicUrl;
+    }
+    return map;
+  }
+
+  private async assertStore(merchantId: string, storeId?: string): Promise<void> {
+    if (!storeId) return;
+    const store = await this.prisma.merchantStore.findFirst({
+      where: { id: storeId, merchantId },
+    });
+    if (!store) {
+      throw new NotFoundException('Store not found for merchant');
+    }
+  }
+
+  private async toStaticResponse(
+    existing: Awaited<ReturnType<QrRepository['findActiveStaticQr']>> & object,
+    alias: string,
+    regenerated: boolean,
+  ): Promise<StaticQrResult> {
+    const latest = existing.payloadVersions[0];
+    const assets = await this.repository.getAssetUrls(existing.id, latest.version);
+    return {
+      success: true,
+      qr_id: existing.id,
+      qr_type: 'static',
+      poi_method: '11',
+      status: existing.status.toLowerCase(),
+      version: latest.version,
+      merchant_id: existing.merchantId,
+      alias,
+      tlv_payload: latest.tlvPayload,
+      crc: latest.crcValue,
+      assets,
+      regenerated,
+    };
+  }
+
+  async listMerchantQrs(merchantId: string, actor: ActorContext) {
+    this.scope.requirePermission(actor, Permission.QR_READ);
+    const merchant = await this.prisma.merchant.findUnique({
+      where: { id: merchantId },
+      include: {
+        profile: true,
+        merchantAlias: true,
+        kyc: true,
+        settlementConfig: true,
+        acquirer: true,
+        integrations: {
+          where: { integrationType: 'TPS' },
+          orderBy: { updatedAt: 'desc' },
+          take: 1,
+        },
+      },
+    });
+    if (!merchant) {
+      throw new NotFoundException('Merchant not found');
+    }
+    this.scope.assertCanAccessMerchant(actor, {
+      id: merchant.id,
+      acquirerId: merchant.acquirerId,
+    });
+
+    const tipsRegistration = await this.prisma.tipsRegistration
+      .findUnique({ where: { merchantId } })
+      .catch(() => null);
+
+    const alias = merchant.merchantAlias?.alias8digit ?? null;
+    const tipsRegistered =
+      tipsRegistration?.status === 'REGISTERED' ||
+      merchant.integrations[0]?.status === 'SUCCESS' ||
+      Boolean(merchant.acquirer.tipsAcquirerId5);
+
+    const rows = await this.repository.listAllForMerchant(merchantId);
+    const qrCodes = await Promise.all(
+      rows.map(async (row) => {
+        const latest = row.payloadVersions[0];
+        const assets = latest
+          ? await this.repository.getAssetUrls(row.id, latest.version)
+          : {};
+        const status = this.mapQrStatus(row.status, row.expiresAt);
+        return {
+          id: row.id,
+          merchant_id: merchantId,
+          student_id: row.studentId,
+          student_name: row.student?.fullName ?? null,
+          admission_no: row.student?.admissionNo ?? null,
+          qr_type: row.qrType.toLowerCase() as 'static' | 'dynamic',
+          poi_method: row.poiMethod as '11' | '12',
+          status,
+          alias: latest?.tag26Alias ?? alias ?? '',
+          merchant_name: merchant.tradingName,
+          mcc: merchant.mcc,
+          city: merchant.profile?.city ?? null,
+          amount: latest?.amount?.toString() ?? null,
+          bill_number: latest?.billNumber ?? null,
+          reference_label: latest?.referenceLabel ?? latest?.tag62InternalId ?? null,
+          version: latest?.version ?? row.currentVersion,
+          crc: latest?.crcValue ?? '',
+          tlv_payload: latest?.tlvPayload ?? '',
+          created_at: row.createdAt.toISOString(),
+          expires_at: row.expiresAt?.toISOString() ?? null,
+          assets,
+        };
+      }),
+    );
+
+    const summary = {
+      total: qrCodes.length,
+      active: qrCodes.filter((q) => q.status === 'active').length,
+      static: qrCodes.filter((q) => q.qr_type === 'static').length,
+      dynamic: qrCodes.filter((q) => q.qr_type === 'dynamic').length,
+      expired: qrCodes.filter((q) => q.status === 'expired').length,
+    };
+
+    return {
+      merchant_id: merchantId,
+      merchant: {
+        id: merchant.id,
+        trading_name: merchant.tradingName,
+        status: merchant.status,
+        mcc: merchant.mcc,
+        is_school: merchant.isSchool,
+        city: merchant.profile?.city ?? null,
+      },
+      eligibility: {
+        kyc_approved: merchant.kyc?.status === 'APPROVED',
+        merchant_active: merchant.status === 'ACTIVE',
+        alias_available: Boolean(merchant.merchantAlias?.isActive && alias),
+        tips_registered: tipsRegistered,
+        settlement_configured:
+          merchant.settlementConfig?.approvalStatus === 'APPROVED',
+      },
+      summary,
+      qr_codes: qrCodes,
+    };
+  }
+
+  async disableQr(qrId: string, actor: ActorContext) {
+    this.scope.requirePermission(actor, Permission.QR_GENERATE);
+    const qr = await this.prisma.qrCode.findUniqueOrThrow({
+      where: { id: qrId },
+      include: { merchant: true },
+    });
+    this.scope.assertCanAccessMerchant(actor, {
+      id: qr.merchantId,
+      acquirerId: qr.merchant.acquirerId,
+    });
+    await this.repository.disableQr(qrId);
+    await this.audit.record({
+      actorId: actor.sub,
+      action: 'QR_DISABLED',
+      entityType: 'qr_code',
+      entityId: qrId,
+      metadata: { merchantId: qr.merchantId },
+    });
+    return { success: true, qr_id: qrId, status: 'disabled' };
+  }
+
+  async regenerateQr(qrId: string, actor: ActorContext) {
+    this.scope.requirePermission(actor, Permission.QR_GENERATE);
+    const qr = await this.prisma.qrCode.findUniqueOrThrow({
+      where: { id: qrId },
+      include: { merchant: true },
+    });
+    if (qr.qrType !== QrType.STATIC) {
+      throw new BadRequestException('Only static QR codes can be regenerated');
+    }
+    this.scope.assertCanAccessMerchant(actor, {
+      id: qr.merchantId,
+      acquirerId: qr.merchant.acquirerId,
+    });
+    return this.generateStatic(qr.merchantId, actor, {
+      storeId: qr.storeId ?? undefined,
+      terminalId: qr.terminalId ?? undefined,
+      forceRegenerate: true,
+    });
+  }
+
+  private mapQrStatus(
+    status: QrStatus,
+    expiresAt: Date | null,
+  ): 'active' | 'pending' | 'expired' | 'disabled' | 'paid' {
+    if (status === QrStatus.REVOKED) return 'disabled';
+    if (status === QrStatus.EXPIRED) return 'expired';
+    if (expiresAt && expiresAt.getTime() < Date.now()) return 'expired';
+    if (status === QrStatus.ACTIVE) return 'active';
+    return 'pending';
+  }
+}

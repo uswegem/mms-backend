@@ -212,20 +212,38 @@ export class MerchantOnboardingAliasController {
     );
   }
 
-  @Post(':id/tps/register')
+  @Post(':id/tips/register')
   @RequirePermissions(Permission.ONBOARDING_WRITE)
-  tpsRegister(@CurrentUser() user: JwtPayload, @Param('id', ParseUUIDPipe) id: string) {
+  @ApiOperation({ summary: 'Register merchant on TIPS' })
+  tipsRegister(@CurrentUser() user: JwtPayload, @Param('id', ParseUUIDPipe) id: string) {
     return this.commandBus.execute(
       new PipelineActionCommand(toActor(user), id, 'tps_register'),
     );
   }
 
-  @Post(':id/tps/retry')
+  @Post(':id/tips/retry')
   @RequirePermissions(Permission.ONBOARDING_WRITE)
-  tpsRetry(@CurrentUser() user: JwtPayload, @Param('id', ParseUUIDPipe) id: string) {
+  @ApiOperation({ summary: 'Retry TIPS registration' })
+  tipsRetry(@CurrentUser() user: JwtPayload, @Param('id', ParseUUIDPipe) id: string) {
     return this.commandBus.execute(
       new PipelineActionCommand(toActor(user), id, 'tps_retry'),
     );
+  }
+
+  /** @deprecated Use POST .../tips/register */
+  @Post(':id/tps/register')
+  @RequirePermissions(Permission.ONBOARDING_WRITE)
+  @ApiOperation({ summary: 'Register merchant on TIPS (legacy path)' })
+  tpsRegister(@CurrentUser() user: JwtPayload, @Param('id', ParseUUIDPipe) id: string) {
+    return this.tipsRegister(user, id);
+  }
+
+  /** @deprecated Use POST .../tips/retry */
+  @Post(':id/tps/retry')
+  @RequirePermissions(Permission.ONBOARDING_WRITE)
+  @ApiOperation({ summary: 'Retry TIPS registration (legacy path)' })
+  tpsRetry(@CurrentUser() user: JwtPayload, @Param('id', ParseUUIDPipe) id: string) {
+    return this.tipsRetry(user, id);
   }
 
   @Post(':id/store/bulk-upload')

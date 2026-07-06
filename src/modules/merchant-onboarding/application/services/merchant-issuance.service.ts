@@ -14,7 +14,7 @@ export class MerchantIssuanceService {
   async issueMerchantAliasAndQr(merchantId: string, actorId: string) {
     const merchant = await this.prisma.merchant.findUniqueOrThrow({
       where: { id: merchantId },
-      include: { merchantAlias: true, profile: true },
+      include: { profile: true, acquirer: true, merchantAlias: true },
     });
 
     let alias = merchant.merchantAlias;
@@ -37,6 +37,7 @@ export class MerchantIssuanceService {
         postalCode: merchant.profile?.postalCode ?? '00000',
         mcc: merchant.mcc,
         publicAlias: alias.alias8digit,
+        acquirerId5: merchant.acquirer.tipsAcquirerId5 ?? undefined,
         createdBy: actorId,
       });
     }

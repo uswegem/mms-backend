@@ -1,7 +1,8 @@
 import { Injectable } from '@nestjs/common';
 import { Prisma, QrStatus, QrType } from '@prisma/client';
 import { PrismaService } from '@infrastructure/database/prisma/prisma.service';
-import { buildStaticTanqrPayload } from '@shared/domain/qr/tanqr-payload.builder';
+import { buildStaticTanqrPayload } from '../../domain/tanqr-payload.builder';
+import type { StoredQrAsset } from '../../application/services/qr-storage.service';
 
 export interface CreateStaticQrInput {
   merchantId: string;
@@ -11,8 +12,30 @@ export interface CreateStaticQrInput {
   postalCode: string;
   mcc: string;
   publicAlias: string;
+  acquirerId5?: string;
   internalRoutingId?: string;
   createdBy?: string;
+}
+
+export interface PersistQrInput {
+  merchantId: string;
+  studentId?: string;
+  storeId?: string;
+  terminalId?: string;
+  qrType: QrType;
+  poiMethod: '11' | '12';
+  createdBy?: string;
+  existingQrId?: string;
+  version: number;
+  tlvPayload: string;
+  crcValue: string;
+  tag26Alias: string;
+  tag62InternalId?: string;
+  amount?: string;
+  billNumber?: string;
+  referenceLabel?: string;
+  expiresAt?: Date;
+  purpose?: string;
 }
 
 type Tx = Prisma.TransactionClient;
@@ -29,6 +52,7 @@ export class QrRepository {
       postalCode: input.postalCode,
       mcc: input.mcc,
       publicAlias: input.publicAlias,
+      acquirerId5: input.acquirerId5,
       internalRoutingId: input.internalRoutingId,
       poiMethod: '11',
     });
@@ -55,18 +79,162 @@ export class QrRepository {
     });
   }
 
+  async findActiveStaticQr(
+    merchantId: string,
+    storeId?: string,
+    terminalId?: string,
+  ) {
+    return this.prisma.qrCode.findFirst({
+      where: {
+        merchantId,
+        qrType: QrType.STATIC,
+        status: QrStatus.ACTIVE,
+        storeId: storeId ?? null,
+        terminalId: terminalId ?? null,
+      },
+      include: {
+        payloadVersions: { orderBy: { version: 'desc' }, take: 1 },
+        renderAssets: {
+          orderBy: { createdAt: 'desc' },
+        },
+      },
+    });
+  }
+
+  async persistQrGeneration(input: PersistQrInput): Promise<{
+    id: string;
+    status: QrStatus;
+    payloadVersionId: string;
+  }> {
+    return this.prisma.$transaction(async (tx) => {
+      let qrId = input.existingQrId;
+
+      if (qrId) {
+        await tx.qrCode.update({
+          where: { id: qrId },
+          data: { currentVersion: input.version },
+        });
+      } else {
+        const created = await tx.qrCode.create({
+          data: {
+            merchantId: input.merchantId,
+            studentId: input.studentId,
+            storeId: input.storeId,
+            terminalId: input.terminalId,
+            qrType: input.qrType,
+            status: QrStatus.ACTIVE,
+            poiMethod: input.poiMethod,
+            currentVersion: input.version,
+            expiresAt: input.expiresAt,
+            createdBy: input.createdBy,
+          },
+        });
+        qrId = created.id;
+      }
+
+      const payloadVersion = await tx.qrPayloadVersion.create({
+        data: {
+          qrId,
+          version: input.version,
+          tlvPayload: input.tlvPayload,
+          crcValue: input.crcValue,
+          tag26Alias: input.tag26Alias,
+          tag62InternalId: input.tag62InternalId,
+          amount: input.amount ? new Prisma.Decimal(input.amount) : undefined,
+          billNumber: input.billNumber,
+          referenceLabel: input.referenceLabel,
+        },
+      });
+
+      return {
+        id: qrId,
+        status: QrStatus.ACTIVE,
+        payloadVersionId: payloadVersion.id,
+      };
+    });
+  }
+
+  async saveRenderAssets(
+    qrId: string,
+    payloadVersionId: string,
+    assets: StoredQrAsset[],
+    bucket: string,
+  ): Promise<void> {
+    await this.prisma.qrRenderAsset.createMany({
+      data: assets.map((asset) => ({
+        qrId,
+        payloadVersionId,
+        format: asset.format,
+        s3Bucket: bucket,
+        s3Key: asset.storagePath,
+        fileHash: asset.fileHash,
+        width: asset.width,
+        height: asset.height,
+        sizeBytes: asset.sizeBytes,
+      })),
+    });
+  }
+
+  async getAssetUrls(qrId: string, version: number): Promise<{ png?: string; svg?: string }> {
+    const payloadVersion = await this.prisma.qrPayloadVersion.findUnique({
+      where: { qrId_version: { qrId, version } },
+    });
+    if (!payloadVersion) return {};
+
+    const assets = await this.prisma.qrRenderAsset.findMany({
+      where: { qrId, payloadVersionId: payloadVersion.id },
+    });
+
+    const map: { png?: string; svg?: string } = {};
+    for (const asset of assets) {
+      const url = `/storage/${asset.s3Key.replace(/\\/g, '/')}`;
+      if (asset.format === 'png') map.png = url;
+      if (asset.format === 'svg') map.svg = url;
+    }
+    return map;
+  }
+
   async findById(id: string) {
     return this.prisma.qrCode.findUnique({
       where: { id },
-      include: { payloadVersions: { orderBy: { version: 'desc' }, take: 1 } },
+      include: {
+        payloadVersions: { orderBy: { version: 'desc' }, take: 1 },
+        renderAssets: true,
+      },
     });
   }
 
   async listByMerchant(merchantId: string) {
+    return this.listAllForMerchant(merchantId);
+  }
+
+  async listAllForMerchant(merchantId: string) {
     return this.prisma.qrCode.findMany({
-      where: { merchantId, status: QrStatus.ACTIVE },
-      include: { payloadVersions: { orderBy: { version: 'desc' }, take: 1 } },
+      where: { merchantId },
+      include: {
+        payloadVersions: { orderBy: { version: 'desc' }, take: 1 },
+        student: {
+          select: { id: true, fullName: true, admissionNo: true },
+        },
+      },
       orderBy: { createdAt: 'desc' },
+    });
+  }
+
+  async disableQr(qrId: string) {
+    return this.prisma.qrCode.update({
+      where: { id: qrId },
+      data: {
+        status: QrStatus.REVOKED,
+        revokedAt: new Date(),
+      },
+    });
+  }
+
+  async findQrForMerchant(qrId: string, merchantId: string) {
+    return this.prisma.qrCode.findFirst({
+      where: { id: qrId, merchantId },
+      include: { payloadVersions: { orderBy: { version: 'desc' }, take: 1 } },
     });
   }
 }
