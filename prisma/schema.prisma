@@ -256,6 +256,7 @@ model Acquirer {
   onboardingApps       OnboardingApplication[]
   approvalPolicies     ApprovalPolicy[]
   approvalTasks        ApprovalTask[]
+  policyOverrides      PolicyOverride[]
 
   @@map("acquirers")
 }
@@ -283,6 +284,7 @@ model User {
   passwordResetTokens PasswordResetToken[]
   userRoles           UserRole[]
   invitationsSent     UserInvitation[] @relation("InvitedBy")
+  policyOverrides     PolicyOverride[]
 
   @@unique([acquirerId, email])
   @@index([acquirerId], map: "idx_users_acquirer")
@@ -1144,6 +1146,36 @@ model Payment {
   merchant Merchant @relation(fields: [merchantId], references: [id])
 
   @@map("payments")
+}
+
+enum PolicyEffect {
+  ALLOW
+  DENY
+
+  @@map("policy_effect")
+}
+
+model PolicyOverride {
+  id             String       @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  acquirerId     String       @map("acquirer_id") @db.Uuid
+  userId         String       @map("user_id") @db.Uuid
+  permissionCode String       @map("permission_code") @db.VarChar(100)
+  effect         PolicyEffect
+  scopeType      String?      @map("scope_type") @db.VarChar(20)
+  scopeId        String?      @map("scope_id") @db.Uuid
+  reason         String?      @db.Text
+  expiresAt      DateTime?    @map("expires_at") @db.Timestamptz(6)
+  createdAt      DateTime     @default(now()) @map("created_at") @db.Timestamptz(6)
+  createdBy      String?      @map("created_by") @db.Uuid
+  revokedAt      DateTime?    @map("revoked_at") @db.Timestamptz(6)
+  revokedBy      String?      @map("revoked_by") @db.Uuid
+
+  acquirer Acquirer @relation(fields: [acquirerId], references: [id])
+  user     User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, permissionCode])
+  @@index([acquirerId])
+  @@map("policy_overrides")
 }
 
 model AuditLog {

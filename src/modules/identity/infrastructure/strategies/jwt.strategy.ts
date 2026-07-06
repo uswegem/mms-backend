@@ -3,6 +3,8 @@ import { ConfigService } from '@nestjs/config';
 import { PassportStrategy } from '@nestjs/passport';
 import { UserStatus } from '@prisma/client';
 import { ExtractJwt, Strategy } from 'passport-jwt';
+import { RbacService } from '@infrastructure/auth/rbac/rbac.service';
+import { EnrichedAuthUserService } from '../services/enriched-auth-user.service';
 import { UserRepository } from '../persistence/user.repository';
 
 export interface JwtPayload {
@@ -12,6 +14,8 @@ export interface JwtPayload {
   merchantId?: string;
   roles: string[];
   permissions: string[];
+  storeIds?: string[];
+  terminalIds?: string[];
   type: 'access';
 }
 
@@ -20,6 +24,7 @@ export class JwtStrategy extends PassportStrategy(Strategy) {
   constructor(
     config: ConfigService,
     private readonly users: UserRepository,
+    private readonly enrichedAuth: EnrichedAuthUserService,
   ) {
     super({
       jwtFromRequest: ExtractJwt.fromAuthHeaderAsBearerToken(),
@@ -38,7 +43,7 @@ export class JwtStrategy extends PassportStrategy(Strategy) {
       throw new UnauthorizedException();
     }
 
-    const userPayload = this.users.toAuthUser(user).toJwtPayload();
-    return { ...userPayload, type: 'access' } as JwtPayload;
+    const enriched = await this.enrichedAuth.fromDbUser(user);
+    return { ...enriched.toJwtPayload(), type: 'access' } as JwtPayload;
   }
 }

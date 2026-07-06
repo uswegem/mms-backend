@@ -3,6 +3,7 @@ import { AssignRolesCommand } from '../commands/assign-roles.command';
 import { UsersRepository } from '../../infrastructure/persistence/users.repository';
 import { UserScopeService } from '../services/user-scope.service';
 import { AuditLogService } from '@infrastructure/audit/services/audit-log.service';
+import { RbacService } from '@infrastructure/auth/rbac/rbac.service';
 import { UserNotFoundException, UserValidationException } from '../../domain/exceptions/user.exceptions';
 import {
   toUserResponse,
@@ -17,6 +18,7 @@ export class AssignRolesHandler
     private readonly users: UsersRepository,
     private readonly scope: UserScopeService,
     private readonly audit: AuditLogService,
+    private readonly rbac: RbacService,
   ) {}
 
   async execute(command: AssignRolesCommand): Promise<UserResponseDto> {
@@ -56,6 +58,8 @@ export class AssignRolesHandler
       entityId: user.id,
       metadata: { roles: roles.map((r) => r.code) },
     });
+
+    await this.rbac.invalidateUser(command.userId);
 
     return toUserResponse(user);
   }

@@ -12,4 +12,18 @@ export class RoleListItemDto {
 
   @ApiProperty()
   isSystem!: boolean;
+
+  @ApiProperty({ required: false })
+  createdAt?: Date;
+
+  @ApiProperty({ required: false })
+  updatedAt?: Date;
+}
+
+export class RoleDetailDto extends RoleListItemDto {
+  @ApiProperty({ type: [String] })
+  permissions!: string[];
+
+  @ApiProperty()
+  assignedUserCount!: number;
 }

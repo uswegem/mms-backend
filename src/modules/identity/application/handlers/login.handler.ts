@@ -16,6 +16,7 @@ import {
   UserNotActiveException,
 } from '../../domain/exceptions/auth.exceptions';
 import { AuditLogService } from '@infrastructure/audit/services/audit-log.service';
+import { EnrichedAuthUserService } from '../../infrastructure/services/enriched-auth-user.service';
 
 export interface LoginResult {
   accessToken: string;
@@ -36,6 +37,7 @@ export class LoginHandler implements ICommandHandler<LoginCommand, LoginResult> 
     private readonly mfa: MfaServicePort,
     private readonly config: ConfigService,
     private readonly audit: AuditLogService,
+    private readonly enrichedAuth: EnrichedAuthUserService,
   ) {}
 
   async execute(command: LoginCommand): Promise<LoginResult> {
@@ -115,7 +117,7 @@ export class LoginHandler implements ICommandHandler<LoginCommand, LoginResult> 
       command.userAgent,
     );
 
-    const authUser = this.users.toAuthUser(user);
+    const authUser = await this.enrichedAuth.fromDbUser(user);
     const tokenPair = await this.tokens.issueTokens(
       authUser,
       undefined,

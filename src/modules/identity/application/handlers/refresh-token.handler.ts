@@ -4,6 +4,7 @@ import { RefreshTokenRepository } from '../../infrastructure/persistence/refresh
 import { UserRepository } from '../../infrastructure/persistence/user.repository';
 import { TokenServicePort } from '../ports/token.service.port';
 import { InvalidRefreshTokenException } from '../../domain/exceptions/auth.exceptions';
+import { EnrichedAuthUserService } from '../../infrastructure/services/enriched-auth-user.service';
 
 export interface RefreshResult {
   accessToken: string;
@@ -21,6 +22,7 @@ export class RefreshTokenHandler
     private readonly refreshTokens: RefreshTokenRepository,
     private readonly users: UserRepository,
     private readonly tokens: TokenServicePort,
+    private readonly enrichedAuth: EnrichedAuthUserService,
   ) {}
 
   async execute(command: RefreshTokenCommand): Promise<RefreshResult> {
@@ -45,7 +47,7 @@ export class RefreshTokenHandler
       throw new InvalidRefreshTokenException();
     }
 
-    const authUser = this.users.toAuthUser(user);
+    const authUser = await this.enrichedAuth.fromDbUser(user);
     const tokenPair = await this.tokens.issueTokens(
       authUser,
       stored.familyId,

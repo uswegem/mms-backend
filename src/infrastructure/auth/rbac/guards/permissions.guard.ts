@@ -2,15 +2,16 @@ import { CanActivate, ExecutionContext, Injectable } from '@nestjs/common';
 import { Reflector } from '@nestjs/core';
 import { Permission } from '../enums/permission.enum';
 import { PERMISSIONS_KEY } from '../decorators/permissions.decorator';
+import { RbacService } from '../rbac.service';
 
-/**
- * Enforces @RequirePermissions() — delegate to RbacService when implemented.
- */
 @Injectable()
 export class PermissionsGuard implements CanActivate {
-  constructor(private readonly reflector: Reflector) {}
+  constructor(
+    private readonly reflector: Reflector,
+    private readonly rbac: RbacService,
+  ) {}
 
-  canActivate(context: ExecutionContext): boolean {
+  async canActivate(context: ExecutionContext): Promise<boolean> {
     const required = this.reflector.getAllAndOverride<Permission[]>(
       PERMISSIONS_KEY,
       [context.getHandler(), context.getClass()],
@@ -18,9 +19,11 @@ export class PermissionsGuard implements CanActivate {
     if (!required?.length) return true;
 
     const { user } = context.switchToHttp().getRequest<{
-      user?: { permissions?: string[] };
+      user?: { sub?: string; permissions?: string[] };
     }>();
-    if (!user?.permissions?.length) return false;
-    return required.every((p) => user.permissions!.includes(p));
+    if (!user?.sub) return false;
+
+    const effective = await this.rbac.getEffectivePermissions(user.sub);
+    return required.every((p) => effective.permissions.includes(p));
   }
 }

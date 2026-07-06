@@ -8,6 +8,9 @@ export enum Permission {
   AUTH_MFA_MANAGE = 'auth:mfa:manage',
   // Authorization
   AUTHZ_ROLE_READ = 'authz:role:read',
+  AUTHZ_ROLE_WRITE = 'authz:role:write',
+  AUTHZ_PERMISSION_READ = 'authz:permission:read',
+  AUTHZ_POLICY_OVERRIDE = 'authz:policy:override',
   AUTHZ_ME = 'authz:me',
   // User management
   USER_READ = 'user:read',

@@ -9,6 +9,9 @@ export interface AuthUserProps {
   status: UserStatus;
   roles: string[];
   permissions: string[];
+  deniedPermissions?: string[];
+  storeIds?: string[];
+  terminalIds?: string[];
 }
 
 export class AuthUser {
@@ -38,6 +41,15 @@ export class AuthUser {
   get permissions(): string[] {
     return this.props.permissions;
   }
+  get deniedPermissions(): string[] {
+    return this.props.deniedPermissions ?? [];
+  }
+  get storeIds(): string[] {
+    return this.props.storeIds ?? [];
+  }
+  get terminalIds(): string[] {
+    return this.props.terminalIds ?? [];
+  }
 
   isActive(): boolean {
     return this.props.status === UserStatus.ACTIVE;
@@ -51,6 +63,8 @@ export class AuthUser {
       merchantId: this.merchantId ?? undefined,
       roles: this.roles,
       permissions: this.permissions,
+      storeIds: this.storeIds.length ? this.storeIds : undefined,
+      terminalIds: this.terminalIds.length ? this.terminalIds : undefined,
     };
   }
 }
