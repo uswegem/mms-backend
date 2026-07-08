@@ -28,9 +28,6 @@ import { ListMerchantDocumentsQuery } from '../../application/queries/list-merch
 import { ListKycReviewsQuery } from '../../application/queries/list-kyc-reviews.query';
 import { CreateMerchantCommand } from '../../application/commands/create-merchant.command';
 import { UpdateMerchantCommand } from '../../application/commands/update-merchant.command';
-import { SuspendMerchantCommand } from '../../application/commands/suspend-merchant.command';
-import { ActivateMerchantCommand } from '../../application/commands/activate-merchant.command';
-import { DormantMerchantCommand } from '../../application/commands/dormant-merchant.command';
 import { AddKycDocumentCommand } from '../../application/commands/add-kyc-document.command';
 import { SubmitKycCommand } from '../../application/commands/submit-kyc.command';
 import { ReviewKycCommand } from '../../application/commands/review-kyc.command';
@@ -152,56 +149,6 @@ export class MerchantsController {
         dto.contactPhone,
         dto.contactEmail,
       ),
-    );
-  }
-
-  @Post(':id/suspend')
-  @RequirePermissions(Permission.MERCHANT_SUSPEND)
-  @ApiOperation({ summary: 'Suspend merchant' })
-  @ApiResponse({ status: 200, type: MerchantResponseDto })
-  async suspend(
-    @CurrentUser() user: JwtPayload,
-    @Param('id', ParseUUIDPipe) id: string,
-  ): Promise<MerchantResponseDto> {
-    return this.commandBus.execute(
-      new SuspendMerchantCommand(toActor(user), id),
-    );
-  }
-
-  @Post(':id/activate')
-  @RequirePermissions(Permission.MERCHANT_SUSPEND)
-  @ApiOperation({ summary: 'Activate merchant' })
-  @ApiResponse({ status: 200, type: MerchantResponseDto })
-  async activate(
-    @CurrentUser() user: JwtPayload,
-    @Param('id', ParseUUIDPipe) id: string,
-  ): Promise<MerchantResponseDto> {
-    return this.commandBus.execute(
-      new ActivateMerchantCommand(toActor(user), id),
-    );
-  }
-
-  @Post(':id/reactivate')
-  @RequirePermissions(Permission.MERCHANT_SUSPEND)
-  @ApiOperation({ summary: 'Reactivate merchant (alias of activate)' })
-  @ApiResponse({ status: 200, type: MerchantResponseDto })
-  async reactivate(
-    @CurrentUser() user: JwtPayload,
-    @Param('id', ParseUUIDPipe) id: string,
-  ): Promise<MerchantResponseDto> {
-    return this.activate(user, id);
-  }
-
-  @Post(':id/dormant')
-  @RequirePermissions(Permission.MERCHANT_SUSPEND)
-  @ApiOperation({ summary: 'Mark merchant as dormant' })
-  @ApiResponse({ status: 200, type: MerchantResponseDto })
-  async dormant(
-    @CurrentUser() user: JwtPayload,
-    @Param('id', ParseUUIDPipe) id: string,
-  ): Promise<MerchantResponseDto> {
-    return this.commandBus.execute(
-      new DormantMerchantCommand(toActor(user), id),
     );
   }
 

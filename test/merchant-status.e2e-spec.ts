@@ -4,6 +4,7 @@ import request from 'supertest';
 import { App } from 'supertest/types';
 import { AppModule } from '../src/app.module';
 import { PrismaService } from '../src/infrastructure/database/prisma/prisma.service';
+import { PasswordHasherPort } from '../src/modules/identity/application/ports/password-hasher.port';
 
 jest.setTimeout(120_000);
 
@@ -123,19 +124,92 @@ describe('Merchant Status Lifecycle (e2e)', () => {
     expect(res.body[0].toStatus).toBe('ACTIVE');
   });
 
-  it('suspends and reactivates active merchant', async () => {
+  it('requests a suspend via maker-checker instead of changing status directly', async () => {
+    const requested = await request(app.getHttpServer())
+      .post(`/api/v1/merchants/${merchantId}/status/request`)
+      .set('Authorization', `Bearer ${accessToken}`)
+      .send({ action: 'SUSPEND', reason: 'e2e test suspend request' })
+      .expect(201);
+
+    expect(requested.body.status).toBe('ACTIVE');
+    expect(requested.body.pendingStatusAction).toBe('SUSPEND');
+
+    const tasksRes = await request(app.getHttpServer())
+      .get('/api/v1/approvals/tasks?status=PENDING')
+      .set('Authorization', `Bearer ${accessToken}`)
+      .expect(200);
+
+    const task = tasksRes.body.data.find(
+      (t: { entityType: string; entityId: string }) =>
+        t.entityType === 'MERCHANT_STATUS_CHANGE' && t.entityId === merchantId,
+    );
+    expect(task).toBeDefined();
+
+    // Self-approval must be blocked (maker === checker).
+    await request(app.getHttpServer())
+      .post(`/api/v1/approvals/tasks/${task.id}/approve`)
+      .set('Authorization', `Bearer ${accessToken}`)
+      .send({})
+      .expect(422);
+
+    // A genuinely different user (checker) is required to approve.
+    const checkerEmail = `checker-${Date.now()}@mms.local`;
+    const rolesRes = await request(app.getHttpServer())
+      .get('/api/v1/authz/roles')
+      .set('Authorization', `Bearer ${accessToken}`)
+      .expect(200);
+    const bankAdminRoleId = rolesRes.body.find(
+      (r: { code: string }) => r.code === 'BANK_ADMIN',
+    ).id;
+
+    const createUserRes = await request(app.getHttpServer())
+      .post('/api/v1/users')
+      .set('Authorization', `Bearer ${accessToken}`)
+      .send({ email: checkerEmail, fullName: 'E2E Checker', roleIds: [bankAdminRoleId] })
+      .expect(201);
+    const checkerUserId: string = createUserRes.body.user.id;
+
+    // The API only returns the auto-generated temp password when
+    // NODE_ENV === 'development' (not in the e2e test environment), so set a
+    // known password hash directly for the purposes of this test.
+    const hasher = app.get(PasswordHasherPort);
+    const checkerPassword = 'E2eChecker@12345';
+    await prisma.authCredential.update({
+      where: { userId: checkerUserId },
+      data: { passwordHash: await hasher.hash(checkerPassword) },
+    });
+
+    const checkerLoginRes = await request(app.getHttpServer())
+      .post('/api/v1/auth/login')
+      .send({ email: checkerEmail, password: checkerPassword })
+      .expect(200);
+    const checkerToken = checkerLoginRes.body.accessToken;
+
+    const approved = await request(app.getHttpServer())
+      .post(`/api/v1/approvals/tasks/${task.id}/approve`)
+      .set('Authorization', `Bearer ${checkerToken}`)
+      .send({})
+      .expect(201);
+    expect(approved.body.status).toBe('APPROVED');
+
+    const merchantRes = await request(app.getHttpServer())
+      .get(`/api/v1/merchants/${merchantId}`)
+      .set('Authorization', `Bearer ${accessToken}`)
+      .expect(200);
+    expect(merchantRes.body.status).toBe('SUSPENDED');
+    expect(merchantRes.body.pendingStatusAction).toBeNull();
+  });
+
+  it('the old direct status-change routes no longer exist', async () => {
     await request(app.getHttpServer())
       .post(`/api/v1/merchants/${merchantId}/status/suspend`)
       .set('Authorization', `Bearer ${accessToken}`)
       .send({})
-      .expect(201);
+      .expect(404);
 
-    const reactivated = await request(app.getHttpServer())
-      .post(`/api/v1/merchants/${merchantId}/status/reactivate`)
+    await request(app.getHttpServer())
+      .post(`/api/v1/merchants/${merchantId}/suspend`)
       .set('Authorization', `Bearer ${accessToken}`)
-      .send({})
-      .expect(201);
-
-    expect(reactivated.body.status).toBe('ACTIVE');
+      .expect(404);
   });
 });

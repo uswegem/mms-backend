@@ -1,6 +1,30 @@
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 import { MerchantStatusAction } from '@prisma/client';
-import { IsOptional, IsString, Length } from 'class-validator';
+import { IsIn, IsOptional, IsString, Length } from 'class-validator';
+
+const REQUESTABLE_STATUS_ACTIONS = [
+  MerchantStatusAction.SUSPEND,
+  MerchantStatusAction.REACTIVATE,
+  MerchantStatusAction.MARK_DORMANT,
+  MerchantStatusAction.CLOSE,
+] as const;
+
+export class RequestStatusChangeDto {
+  @ApiProperty({ enum: REQUESTABLE_STATUS_ACTIONS })
+  @IsIn(REQUESTABLE_STATUS_ACTIONS)
+  action!: (typeof REQUESTABLE_STATUS_ACTIONS)[number];
+
+  @ApiProperty({ description: 'Reason for the request — required for governance/audit' })
+  @IsString()
+  @Length(1, 255)
+  reason!: string;
+
+  @ApiPropertyOptional()
+  @IsOptional()
+  @IsString()
+  @Length(0, 2000)
+  notes?: string;
+}
 
 export class StatusChangeNotesDto {
   @ApiPropertyOptional()

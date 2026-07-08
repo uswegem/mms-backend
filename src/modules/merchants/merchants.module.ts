@@ -12,9 +12,6 @@ import { ListMerchantDocumentsHandler } from './application/handlers/list-mercha
 import { ListKycReviewsHandler } from './application/handlers/list-kyc-reviews.handler';
 import { CreateMerchantHandler } from './application/handlers/create-merchant.handler';
 import { UpdateMerchantHandler } from './application/handlers/update-merchant.handler';
-import { SuspendMerchantHandler } from './application/handlers/suspend-merchant.handler';
-import { ActivateMerchantHandler } from './application/handlers/activate-merchant.handler';
-import { DormantMerchantHandler } from './application/handlers/dormant-merchant.handler';
 import { AddKycDocumentHandler } from './application/handlers/add-kyc-document.handler';
 import { SubmitKycHandler } from './application/handlers/submit-kyc.handler';
 import { ReviewKycHandler } from './application/handlers/review-kyc.handler';
@@ -28,9 +25,6 @@ const QueryHandlers = [
 const CommandHandlers = [
   CreateMerchantHandler,
   UpdateMerchantHandler,
-  SuspendMerchantHandler,
-  ActivateMerchantHandler,
-  DormantMerchantHandler,
   AddKycDocumentHandler,
   SubmitKycHandler,
   ReviewKycHandler,

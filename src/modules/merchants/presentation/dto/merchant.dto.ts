@@ -93,6 +93,18 @@ export class MerchantResponseDto {
 
   @ApiProperty()
   updatedAt!: string;
+
+  @ApiPropertyOptional({ nullable: true })
+  pendingStatusAction!: string | null;
+
+  @ApiPropertyOptional({ nullable: true })
+  pendingStatusReason!: string | null;
+
+  @ApiPropertyOptional({ nullable: true })
+  pendingStatusRequestedBy!: string | null;
+
+  @ApiPropertyOptional({ nullable: true })
+  pendingStatusRequestedAt!: string | null;
 }
 
 export class CreateMerchantDto {

@@ -3,6 +3,7 @@ import { CqrsModule } from '@nestjs/cqrs';
 import { AuthModule } from '@infrastructure/auth/auth.module';
 import { AuditModule } from '@infrastructure/audit/audit.module';
 import { MerchantOnboardingModule } from '@modules/merchant-onboarding/merchant-onboarding.module';
+import { MerchantStatusModule } from '@modules/merchant-status/merchant-status.module';
 import { ApprovalsController } from './presentation/http/approvals.controller';
 import { ApprovalsRepository } from './infrastructure/persistence/approvals.repository';
 import { MakerCheckerService } from './application/services/maker-checker.service';
@@ -24,6 +25,7 @@ const handlers = [
     AuthModule,
     AuditModule,
     forwardRef(() => MerchantOnboardingModule),
+    forwardRef(() => MerchantStatusModule),
   ],
   controllers: [ApprovalsController],
   providers: [ApprovalsRepository, MakerCheckerService, ...handlers],

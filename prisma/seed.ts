@@ -310,7 +310,7 @@ async function main() {
     });
   }
 
-  for (const entityType of ['MERCHANT_ONBOARDING', 'SCHOOL_ONBOARDING'] as const) {
+  for (const entityType of ['MERCHANT_ONBOARDING', 'SCHOOL_ONBOARDING', 'MERCHANT_STATUS_CHANGE'] as const) {
     await prisma.approvalPolicy.upsert({
       where: {
         acquirerId_entityType: { acquirerId: acquirer.id, entityType },

@@ -178,6 +178,7 @@ enum ApprovalEntityType {
   FEE_RULE
   MERCHANT_LIMIT
   CONFIG_CHANGE
+  MERCHANT_STATUS_CHANGE
 
   @@map("approval_entity_type")
 }
@@ -474,6 +475,11 @@ model Merchant {
   updatedBy   String?        @map("updated_by") @db.Uuid
   deletedAt   DateTime?      @map("deleted_at") @db.Timestamptz(6)
   deletedBy   String?        @map("deleted_by") @db.Uuid
+
+  pendingStatusAction      MerchantStatusAction? @map("pending_status_action")
+  pendingStatusReason      String?               @map("pending_status_reason") @db.VarChar(255)
+  pendingStatusRequestedBy String?               @map("pending_status_requested_by") @db.Uuid
+  pendingStatusRequestedAt DateTime?             @map("pending_status_requested_at") @db.Timestamptz(6)
 
   acquirer  Acquirer           @relation(fields: [acquirerId], references: [id])
   users     User[]

@@ -1,4 +1,4 @@
-import { Module } from '@nestjs/common';
+import { Module, forwardRef } from '@nestjs/common';
 import { AuthModule } from '@infrastructure/auth/auth.module';
 import { AuditModule } from '@infrastructure/audit/audit.module';
 import { DatabaseModule } from '@infrastructure/database/database.module';
@@ -13,7 +13,13 @@ import { QrController } from './presentation/http/qr.controller';
 import { QrValidators } from './validators/qr.validators';
 
 @Module({
-  imports: [DatabaseModule, AuthModule, AuditModule, AliasModule, MerchantsModule],
+  imports: [
+    DatabaseModule,
+    AuthModule,
+    AuditModule,
+    AliasModule,
+    forwardRef(() => MerchantsModule),
+  ],
   controllers: [QrController, MerchantQrController],
   providers: [
     QrRepository,

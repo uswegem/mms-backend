@@ -19,6 +19,7 @@ import { MerchantStatusLifecycleService } from '../../application/services/merch
 import {
   AllowedStatusActionsDto,
   MerchantStatusHistoryDto,
+  RequestStatusChangeDto,
   StatusChangeNotesDto,
 } from '../dto/merchant-status.dto';
 import { MerchantResponseDto } from '@modules/merchants/presentation/dto/merchant.dto';
@@ -126,55 +127,17 @@ export class MerchantStatusController {
     return this.lifecycle.reject(merchantId, actor, dto.reason, dto.notes);
   }
 
-  @Post('suspend')
+  @Post('request')
   @RequirePermissions(Permission.MERCHANT_SUSPEND)
-  @ApiOperation({ summary: 'Suspend active merchant' })
-  async suspend(
+  @ApiOperation({ summary: 'Request a status change (creates a maker-checker approval task)' })
+  async requestChange(
     @CurrentUser() user: JwtPayload,
     @Param('merchantId', ParseUUIDPipe) merchantId: string,
-    @Body() dto: StatusChangeNotesDto,
+    @Body() dto: RequestStatusChangeDto,
   ): Promise<MerchantResponseDto> {
     const actor = toActor(user);
     await this.assertAccess(actor, merchantId);
-    return this.lifecycle.suspend(merchantId, actor, dto.notes);
+    return this.lifecycle.requestStatusChange(merchantId, actor, dto.action, dto.reason, dto.notes);
   }
 
-  @Post('reactivate')
-  @RequirePermissions(Permission.MERCHANT_SUSPEND)
-  @ApiOperation({ summary: 'Reactivate suspended or dormant merchant' })
-  async reactivate(
-    @CurrentUser() user: JwtPayload,
-    @Param('merchantId', ParseUUIDPipe) merchantId: string,
-    @Body() dto: StatusChangeNotesDto,
-  ): Promise<MerchantResponseDto> {
-    const actor = toActor(user);
-    await this.assertAccess(actor, merchantId);
-    return this.lifecycle.reactivate(merchantId, actor, dto.notes);
-  }
-
-  @Post('dormant')
-  @RequirePermissions(Permission.MERCHANT_SUSPEND)
-  @ApiOperation({ summary: 'Mark active merchant as dormant' })
-  async dormant(
-    @CurrentUser() user: JwtPayload,
-    @Param('merchantId', ParseUUIDPipe) merchantId: string,
-    @Body() dto: StatusChangeNotesDto,
-  ): Promise<MerchantResponseDto> {
-    const actor = toActor(user);
-    await this.assertAccess(actor, merchantId);
-    return this.lifecycle.markDormant(merchantId, actor, dto.notes);
-  }
-
-  @Post('close')
-  @RequirePermissions(Permission.MERCHANT_CLOSE)
-  @ApiOperation({ summary: 'Permanently close merchant' })
-  async close(
-    @CurrentUser() user: JwtPayload,
-    @Param('merchantId', ParseUUIDPipe) merchantId: string,
-    @Body() dto: StatusChangeNotesDto,
-  ): Promise<MerchantResponseDto> {
-    const actor = toActor(user);
-    await this.assertAccess(actor, merchantId);
-    return this.lifecycle.close(merchantId, actor, dto.notes);
-  }
 }

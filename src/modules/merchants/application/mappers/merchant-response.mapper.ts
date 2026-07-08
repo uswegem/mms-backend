@@ -32,6 +32,10 @@ export interface MerchantResponseDto {
   kyc: MerchantKycDto | null;
   createdAt: string;
   updatedAt: string;
+  pendingStatusAction: string | null;
+  pendingStatusReason: string | null;
+  pendingStatusRequestedBy: string | null;
+  pendingStatusRequestedAt: string | null;
 }
 
 export interface MerchantDocumentDto {
@@ -78,5 +82,9 @@ export function toMerchantResponse(
       : null,
     createdAt: merchant.createdAt.toISOString(),
     updatedAt: merchant.updatedAt.toISOString(),
+    pendingStatusAction: merchant.pendingStatusAction ?? null,
+    pendingStatusReason: merchant.pendingStatusReason ?? null,
+    pendingStatusRequestedBy: merchant.pendingStatusRequestedBy ?? null,
+    pendingStatusRequestedAt: merchant.pendingStatusRequestedAt?.toISOString() ?? null,
   };
 }

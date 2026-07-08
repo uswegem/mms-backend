@@ -88,9 +88,43 @@ export class MerchantStatusRepository {
           status: data.toStatus,
           updatedBy: data.actorId,
           ...(data.onboardedAt ? { onboardedAt: data.onboardedAt } : {}),
+          // Any successful transition (including one applied on maker-checker
+          // approval) resolves whatever request was pending.
+          pendingStatusAction: null,
+          pendingStatusReason: null,
+          pendingStatusRequestedBy: null,
+          pendingStatusRequestedAt: null,
         },
         include: merchantInclude,
       });
+    });
+  }
+
+  async setPendingStatusRequest(
+    merchantId: string,
+    data: { action: MerchantStatusAction; reason: string; requestedBy: string },
+  ): Promise<MerchantWithRelations> {
+    return this.prisma.merchant.update({
+      where: { id: merchantId },
+      data: {
+        pendingStatusAction: data.action,
+        pendingStatusReason: data.reason,
+        pendingStatusRequestedBy: data.requestedBy,
+        pendingStatusRequestedAt: new Date(),
+      },
+      include: merchantInclude,
+    });
+  }
+
+  async clearPendingStatusRequest(merchantId: string): Promise<void> {
+    await this.prisma.merchant.update({
+      where: { id: merchantId },
+      data: {
+        pendingStatusAction: null,
+        pendingStatusReason: null,
+        pendingStatusRequestedBy: null,
+        pendingStatusRequestedAt: null,
+      },
     });
   }
 
