@@ -175,6 +175,25 @@ export class QrRepository {
     });
   }
 
+  async getRenderAsset(
+    qrId: string,
+    version: number,
+    format: 'png' | 'svg',
+  ) {
+    const payloadVersion = await this.prisma.qrPayloadVersion.findUnique({
+      where: { qrId_version: { qrId, version } },
+    });
+    if (!payloadVersion) return null;
+
+    return this.prisma.qrRenderAsset.findFirst({
+      where: {
+        qrId,
+        payloadVersionId: payloadVersion.id,
+        format,
+      },
+    });
+  }
+
   async getAssetUrls(qrId: string, version: number): Promise<{ png?: string; svg?: string }> {
     const payloadVersion = await this.prisma.qrPayloadVersion.findUnique({
       where: { qrId_version: { qrId, version } },

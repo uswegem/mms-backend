@@ -46,7 +46,8 @@ ALTER TABLE qr_render_assets
   ADD COLUMN IF NOT EXISTS file_hash VARCHAR(64),
   ADD COLUMN IF NOT EXISTS width INTEGER,
   ADD COLUMN IF NOT EXISTS height INTEGER,
-  ADD COLUMN IF NOT EXISTS size_bytes BIGINT;
+  ADD COLUMN IF NOT EXISTS size_bytes BIGINT,
+  ADD COLUMN IF NOT EXISTS template_id UUID;
 
 CREATE INDEX IF NOT EXISTS idx_qr_render_assets_qr_id ON qr_render_assets(qr_id);
 CREATE INDEX IF NOT EXISTS idx_qr_codes_merchant_static_lookup

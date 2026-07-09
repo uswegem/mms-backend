@@ -1,78 +1,66 @@
-# QR Generation (TANQR)
+# TANQR Merchant-Presented QR Generator
 
-Local static and dynamic TANQR QR generation for MMS merchants and schools. No external QR, payment, or TIPS APIs are called during generation.
+In-house TANQR QR generation for Tanzania instant payments. **No third-party QR APIs, SaaS providers, or external payment QR services** are used. The system generates:
 
-## Flow
+1. The EMVCo/TANQR TLV payload string locally
+2. The QR matrix image (PNG/SVG) locally via the `qrcode` npm package
+3. The Annex 2 merchant display layout (SVG/PDF) locally via `pdfkit`
 
-1. **Eligibility** — `QrValidators.validateMerchantForQr()` checks merchant status, profile, alias, MCC, and local TIPS/acquirer data.
-2. **TLV payload** — `buildTanqrPayload()` assembles EMVCo tags in TANQR order (00, 01, 26, 52, 53, [54], 58–62, 63).
-3. **CRC16** — ISO/IEC 13239 style CRC over payload + `6304` suffix.
-4. **Persistence** — `qr_codes`, `qr_payload_versions`, `qr_render_assets` (versioned; static reuse unless `force_regenerate`).
-5. **Render** — PNG/SVG via local `qrcode` package; files under `storage/qr/{merchant_id}/{qr_id}/v{version}.*`.
+## Architecture
 
-## API
+```
+API Layer (NestJS)
+  POST /merchants/:id/qr/static   POST /merchants/:id/qr/dynamic
+  POST /qr/validate               GET  /qr/:id/image.png
+  GET  /qr/:id/display.pdf        GET  /qr/:id
+        |
+QrService (orchestration)
+  eligibility -> payload -> persist -> render -> audit
+        |
+  QrValidators | TanqrPayloadBuilder | QrRendererService | QrAnnex2DisplayService
+```
+
+### Static vs Dynamic
+
+| Type | Tag 01 | Tag 54 (amount) | Use case |
+|------|--------|-----------------|----------|
+| Static | `11` | Omitted | Reusable POS QR; customer enters amount |
+| Dynamic | `12` | Required | Per-transaction QR with fixed amount |
+
+## API endpoints
+
+Base: `/api/v1`
 
 | Method | Path | Description |
 |--------|------|-------------|
-| `POST` | `/api/v1/merchants/{merchantId}/qr/static` | Reusable static QR (POI `11`) |
-| `POST` | `/api/v1/merchants/{merchantId}/qr/dynamic` | Per-payment dynamic QR (POI `12`, tag `54`) |
-| `GET` | `/api/v1/merchants/{merchantId}/qr` | List active QRs |
+| `POST` | `/merchants/{merchantId}/qr/static` | Generate static QR (POI `11`) |
+| `POST` | `/merchants/{merchantId}/qr/dynamic` | Generate dynamic QR (POI `12`) |
+| `GET` | `/merchants/{merchantId}/qr` | List merchant QRs |
+| `POST` | `/qr/static` | Legacy static (body includes `merchantId`) |
+| `POST` | `/qr/dynamic` | Legacy dynamic (body includes `merchantId`) |
+| `POST` | `/qr/validate` | Verify CRC or build-and-verify payload |
+| `GET` | `/qr/{id}` | Get QR with latest payload |
+| `GET` | `/qr/{id}/image.png` | Download QR matrix PNG |
+| `GET` | `/qr/{id}/image.svg` | Download QR matrix SVG |
+| `GET` | `/qr/{id}/display.pdf` | Download Annex 2 display PDF |
+| `PATCH` | `/qr/{id}/disable` | Revoke QR |
 
-### Static example
+## Official golden sample
 
-```http
-POST /api/v1/merchants/{merchantId}/qr/static
-Authorization: Bearer <token>
-Content-Type: application/json
-
-{
-  "store_id": null,
-  "terminal_id": null,
-  "purpose": "checkout",
-  "force_regenerate": false
-}
+Expected payload for static merchant sample:
+```
+00020101021126390014tz.go.bot.tips0105010010208123456785204581453038345802TZ5914YN RESTAURANTS6006DODOMA610541000622103080011234907051100263047D47
 ```
 
-```json
-{
-  "success": true,
-  "qr_id": "…",
-  "qr_type": "static",
-  "poi_method": "11",
-  "status": "active",
-  "version": 1,
-  "merchant_id": "…",
-  "alias": "78000028",
-  "tlv_payload": "000201…",
-  "crc": "35EA",
-  "assets": {
-    "png": "/storage/qr/…/v1.png",
-    "svg": "/storage/qr/…/v1.svg"
-  }
-}
-```
+## How to verify TANQR compliance
 
-### Dynamic example
-
-```http
-POST /api/v1/merchants/{merchantId}/qr/dynamic
-Authorization: Bearer <token>
-Content-Type: application/json
-
-{
-  "amount": "150000",
-  "bill_number": "TERM1-2024-00100014",
-  "reference_label": "00100014",
-  "expires_in_minutes": 30
-}
-```
-
-School/student QRs place the public Lipa Namba in tag `26/02` and the internal routing ID in tag `62/05` only (not in payer-facing alias).
+1. Run unit tests: `npm test -- --testPathPatterns=modules/qr`
+2. Call `POST /qr/validate` with `tlv_payload` to verify CRC
+3. Scan generated PNG with a QR reader; decoded text must match TLV payload exactly
+4. Test with TIPS-compatible banking app for merchant name, alias, and amount display
 
 ## Tests
 
 ```bash
 npm test -- --testPathPatterns=modules/qr
 ```
-
-Golden vectors for TLV + CRC are in `tests/tanqr-payload.spec.ts`.

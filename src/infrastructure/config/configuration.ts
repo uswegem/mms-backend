@@ -39,6 +39,15 @@ export default () => ({
     storagePath: process.env.QR_STORAGE_PATH ?? 'storage',
     storageBucket: process.env.QR_STORAGE_BUCKET ?? 'local',
   },
+  mail: {
+    enabled: process.env.MAIL_ENABLED === 'true',
+    host: process.env.MAIL_HOST,
+    port: parseInt(process.env.MAIL_PORT ?? '587', 10),
+    secure: process.env.MAIL_SECURE === 'true',
+    user: process.env.MAIL_USER,
+    pass: process.env.MAIL_PASS,
+    from: process.env.MAIL_FROM ?? 'MMS <noreply@mms.local>',
+  },
   auth: {
     maxFailedAttempts: parseInt(process.env.AUTH_MAX_FAILED_ATTEMPTS ?? '5', 10),
     lockoutDurationMinutes: parseInt(

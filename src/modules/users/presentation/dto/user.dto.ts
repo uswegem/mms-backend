@@ -86,7 +86,12 @@ export class CreateUserResponseDto {
   @ApiProperty({ type: UserResponseDto })
   user!: UserResponseDto;
 
-  @ApiPropertyOptional({ description: 'Returned only in development' })
+  @ApiPropertyOptional({ description: 'True when welcome email was sent' })
+  emailSent?: boolean;
+
+  @ApiPropertyOptional({
+    description: 'Returned in development when email was not sent',
+  })
   temporaryPassword?: string;
 }
 

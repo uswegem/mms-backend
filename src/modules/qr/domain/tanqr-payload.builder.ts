@@ -1,5 +1,10 @@
 import { buildNestedTLV, buildTLV } from './tlv.builder';
 import { crc16 } from './crc16';
+import {
+  validateAcquirerId5,
+  validateMerchantId,
+  validateTag62Content,
+} from './tanqr-payload.validator';
 
 export const TANQR_DOMAIN = 'tz.go.bot.tips';
 export const TANQR_CURRENCY = '834';
@@ -49,11 +54,12 @@ function buildTipsMerchantAccountTemplate(
   acquirerId5: string,
   publicAlias: string,
 ): string {
-  const normalizedAcquirer = acquirerId5.padStart(5, '0').slice(-5);
+  const normalizedAcquirer = validateAcquirerId5(acquirerId5);
+  const merchantId = validateMerchantId(publicAlias);
   const children =
     buildTLV('00', domain) +
     buildTLV('01', normalizedAcquirer) +
-    buildTLV('02', publicAlias);
+    buildTLV('02', merchantId);
   return buildNestedTLV('26', children);
 }
 
@@ -65,7 +71,9 @@ function buildAdditionalDataField(data?: TanqrAdditionalData): string | null {
   if (data.referenceLabel) parts.push(buildTLV('05', data.referenceLabel));
   if (data.terminalLabel) parts.push(buildTLV('07', data.terminalLabel));
   if (parts.length === 0) return null;
-  return buildNestedTLV('62', parts.join(''));
+  const nested = parts.join('');
+  validateTag62Content(nested);
+  return buildNestedTLV('62', nested);
 }
 
 export function buildTanqrPayload(input: TanqrPayloadInput): {

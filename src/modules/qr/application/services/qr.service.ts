@@ -14,6 +14,9 @@ import { QrRepository } from '../../infrastructure/persistence/qr.repository';
 import { QrValidators } from '../../validators/qr.validators';
 import { QrRendererService } from './qr-renderer.service';
 import { QrStorageService } from './qr-storage.service';
+import { QrAnnex2DisplayService } from './qr-annex2-display.service';
+import { QrPayloadValidatorService } from './qr-payload-validator.service';
+import { extractTag62SubTag } from '../../domain/tlv.parser';
 
 export interface QrAssetMap {
   png?: string;
@@ -61,6 +64,8 @@ export class QrService {
     private readonly validators: QrValidators,
     private readonly renderer: QrRendererService,
     private readonly storage: QrStorageService,
+    private readonly annex2: QrAnnex2DisplayService,
+    private readonly payloadValidator: QrPayloadValidatorService,
     private readonly audit: AuditLogService,
     private readonly scope: MerchantScopeService,
   ) {}
@@ -458,6 +463,104 @@ export class QrService {
       summary,
       qr_codes: qrCodes,
     };
+  }
+
+  async validatePayload(dto: Parameters<QrPayloadValidatorService['validateRequest']>[0]) {
+    return this.payloadValidator.validateRequest(dto);
+  }
+
+  async getQrImageBuffer(
+    qrId: string,
+    actor: ActorContext,
+    format: 'png' | 'svg' = 'png',
+  ): Promise<{ buffer: Buffer; contentType: string }> {
+    this.scope.requirePermission(actor, Permission.QR_READ);
+    const qr = await this.prisma.qrCode.findUniqueOrThrow({
+      where: { id: qrId },
+      include: {
+        merchant: { include: { acquirer: true } },
+        payloadVersions: { orderBy: { version: 'desc' }, take: 1 },
+      },
+    });
+    this.scope.assertCanAccessMerchant(actor, {
+      id: qr.merchantId,
+      acquirerId: qr.merchant.acquirerId,
+    });
+
+    const latest = qr.payloadVersions[0];
+    if (!latest) {
+      throw new NotFoundException('QR payload not found');
+    }
+
+    let asset = await this.repository.getRenderAsset(qrId, latest.version, format);
+    if (!asset) {
+      const rendered =
+        format === 'png'
+          ? await this.renderer.renderPng(latest.tlvPayload)
+          : await this.renderer.renderSvg(latest.tlvPayload);
+      const stored = await this.storage.saveRenderedAssets(
+        qr.merchantId,
+        qrId,
+        latest.version,
+        [rendered],
+      );
+      await this.repository.saveRenderAssets(
+        qrId,
+        latest.id,
+        stored,
+        this.storage.getBucket(),
+      );
+      asset = await this.repository.getRenderAsset(qrId, latest.version, format);
+    }
+
+    if (!asset) {
+      throw new NotFoundException(`QR ${format} asset not found`);
+    }
+
+    const buffer = await this.storage.readAsset(asset.s3Key);
+    return {
+      buffer,
+      contentType: format === 'png' ? 'image/png' : 'image/svg+xml',
+    };
+  }
+
+  async getDisplayPdf(
+    qrId: string,
+    actor: ActorContext,
+    paperSize?: string,
+  ): Promise<Buffer> {
+    this.scope.requirePermission(actor, Permission.QR_READ);
+    const qr = await this.prisma.qrCode.findUniqueOrThrow({
+      where: { id: qrId },
+      include: {
+        merchant: { include: { acquirer: true } },
+        payloadVersions: { orderBy: { version: 'desc' }, take: 1 },
+      },
+    });
+    this.scope.assertCanAccessMerchant(actor, {
+      id: qr.merchantId,
+      acquirerId: qr.merchant.acquirerId,
+    });
+
+    const latest = qr.payloadVersions[0];
+    if (!latest) {
+      throw new NotFoundException('QR payload not found');
+    }
+
+    const { buffer: qrPng } = await this.getQrImageBuffer(qrId, actor, 'png');
+    const alias =
+      extractTag62SubTag(latest.tlvPayload, '03') ??
+      latest.tag26Alias ??
+      '--------';
+
+    return this.annex2.renderPdf({
+      merchantName: qr.merchant.tradingName,
+      aliasMerchantId: alias,
+      qrImagePng: qrPng,
+      acquirerName: qr.merchant.acquirer.tradingName ?? qr.merchant.acquirer.legalName,
+      acquirerSlogan: 'Scan to Pay with TANQR',
+      paperSize,
+    });
   }
 
   async disableQr(qrId: string, actor: ActorContext) {
