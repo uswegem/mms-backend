@@ -1,6 +1,6 @@
 import { Injectable } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
-import { mkdir, writeFile } from 'fs/promises';
+import { mkdir, readFile, writeFile } from 'fs/promises';
 import { dirname, join } from 'path';
 import type { RenderedQrAsset } from './qr-renderer.service';
 
@@ -70,5 +70,13 @@ export class QrStorageService {
 
   getBucket(): string {
     return this.bucket;
+  }
+
+  getAbsolutePath(relativePath: string): string {
+    return join(this.root, relativePath);
+  }
+
+  async readAsset(relativePath: string): Promise<Buffer> {
+    return readFile(this.getAbsolutePath(relativePath));
   }
 }

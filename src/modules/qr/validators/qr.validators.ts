@@ -43,10 +43,15 @@ export class QrValidators {
     return method;
   }
 
-  validateMcc(mcc: string): string {
+  validateMcc(mcc: string, allowUnavailable = false): string {
     const normalized = mcc.replace(/\D/g, '').padStart(4, '0').slice(-4);
-    if (!/^\d{4}$/.test(normalized) || normalized === '0000') {
+    if (!/^\d{4}$/.test(normalized)) {
       throw new BadRequestException('Merchant MCC must be a valid 4-digit code');
+    }
+    if (normalized === '0000' && !allowUnavailable) {
+      throw new BadRequestException(
+        'Merchant MCC must be set; use 0000 only when unavailable',
+      );
     }
     return normalized;
   }

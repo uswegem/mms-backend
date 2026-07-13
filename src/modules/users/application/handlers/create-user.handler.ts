@@ -1,11 +1,13 @@
 import { CommandHandler, ICommandHandler } from '@nestjs/cqrs';
 import { ConfigService } from '@nestjs/config';
+import { Logger } from '@nestjs/common';
 import { randomBytes } from 'crypto';
 import { CreateUserCommand } from '../commands/create-user.command';
 import { UsersRepository } from '../../infrastructure/persistence/users.repository';
 import { UserScopeService } from '../services/user-scope.service';
 import { PasswordHasherPort } from '@modules/identity/application/ports/password-hasher.port';
 import { AuditLogService } from '@infrastructure/audit/services/audit-log.service';
+import { EmailService } from '@infrastructure/email/email.service';
 import { Permission } from '@infrastructure/auth/rbac/enums/permission.enum';
 import {
   UserConflictException,
@@ -18,6 +20,7 @@ import {
 
 export interface CreateUserResult {
   user: UserResponseDto;
+  emailSent?: boolean;
   temporaryPassword?: string;
 }
 
@@ -25,11 +28,14 @@ export interface CreateUserResult {
 export class CreateUserHandler
   implements ICommandHandler<CreateUserCommand, CreateUserResult>
 {
+  private readonly logger = new Logger(CreateUserHandler.name);
+
   constructor(
     private readonly users: UsersRepository,
     private readonly scope: UserScopeService,
     private readonly passwordHasher: PasswordHasherPort,
     private readonly audit: AuditLogService,
+    private readonly email: EmailService,
     private readonly config: ConfigService,
   ) {}
 
@@ -87,12 +93,28 @@ export class CreateUserHandler
       metadata: { email: user.email, roles: roles.map((r) => r.code) },
     });
 
+    let emailSent = false;
+    if (this.email.isEnabled()) {
+      try {
+        emailSent = await this.email.sendWelcomeCredentials({
+          to: user.email,
+          fullName: user.fullName,
+          temporaryPassword: tempPassword,
+        });
+      } catch (err) {
+        this.logger.error(
+          `Failed to send welcome email to ${user.email}`,
+          err instanceof Error ? err.stack : err,
+        );
+      }
+    }
+
+    const isDev = this.config.get<string>('nodeEnv') === 'development';
+
     return {
       user: toUserResponse(user),
-      temporaryPassword:
-        this.config.get<string>('nodeEnv') === 'development'
-          ? tempPassword
-          : undefined,
+      emailSent,
+      temporaryPassword: isDev && !emailSent ? tempPassword : undefined,
     };
   }
 }

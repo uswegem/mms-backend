@@ -9,7 +9,7 @@ import {
   Query,
   Res,
 } from '@nestjs/common';
-import { ApiBearerAuth, ApiOperation, ApiTags } from '@nestjs/swagger';
+import { ApiBearerAuth, ApiOperation, ApiProduces, ApiTags } from '@nestjs/swagger';
 import type { Response } from 'express';
 import { RequirePermissions } from '@infrastructure/auth/rbac/decorators/permissions.decorator';
 import { Permission } from '@infrastructure/auth/rbac/enums/permission.enum';
@@ -19,7 +19,11 @@ import type { JwtPayload } from '@modules/identity/infrastructure/strategies/jwt
 import { QrService } from '../../application/services/qr.service';
 import { QrRepository } from '../../infrastructure/persistence/qr.repository';
 import { CreateStaticQrDto } from '../dto/create-static-qr.dto';
-import { LegacyCreateStaticQrDto } from '../dto/legacy-qr.dto';
+import {
+  LegacyCreateDynamicQrDto,
+  LegacyCreateStaticQrDto,
+} from '../dto/legacy-qr.dto';
+import { ValidateQrPayloadDto } from '../dto/validate-qr-payload.dto';
 
 function toActor(user: JwtPayload): ActorContext {
   return {
@@ -42,6 +46,44 @@ export class QrController {
     private readonly qrRepository: QrRepository,
   ) {}
 
+  @Post('validate')
+  @RequirePermissions(Permission.QR_READ)
+  @ApiOperation({ summary: 'Validate or build-and-verify a TANQR payload' })
+  validatePayload(@Body() dto: ValidateQrPayloadDto) {
+    return this.qrService.validatePayload(dto);
+  }
+
+  @Post('static')
+  @RequirePermissions(Permission.QR_GENERATE)
+  @ApiOperation({ summary: 'Generate static TANQR (legacy body with merchantId)' })
+  createStaticLegacy(
+    @CurrentUser() user: JwtPayload,
+    @Body() dto: LegacyCreateStaticQrDto,
+  ) {
+    return this.qrService.generateStatic(dto.merchantId, toActor(user), {
+      forceRegenerate: dto.force_regenerate,
+      internalRoutingId: dto.internalRoutingId,
+      studentId: dto.studentId,
+    });
+  }
+
+  @Post('dynamic')
+  @RequirePermissions(Permission.QR_GENERATE)
+  @ApiOperation({ summary: 'Generate dynamic TANQR (legacy body with merchantId)' })
+  createDynamicLegacy(
+    @CurrentUser() user: JwtPayload,
+    @Body() dto: LegacyCreateDynamicQrDto,
+  ) {
+    return this.qrService.generateDynamic(dto.merchantId, toActor(user), {
+      amount: dto.amount,
+      billNumber: dto.bill_number,
+      referenceLabel: dto.reference_label,
+      storeId: dto.store_id,
+      terminalId: dto.terminal_id,
+      expiresInMinutes: dto.expires_in_minutes,
+    });
+  }
+
   @Get('merchant/:merchantId')
   @RequirePermissions(Permission.QR_READ)
   @ApiOperation({ summary: 'List merchant QR codes' })
@@ -50,6 +92,52 @@ export class QrController {
     @CurrentUser() user: JwtPayload,
   ) {
     return this.qrService.listMerchantQrs(merchantId, toActor(user));
+  }
+
+  @Get(':id/image.png')
+  @RequirePermissions(Permission.QR_READ)
+  @ApiOperation({ summary: 'Download QR matrix as PNG (locally generated)' })
+  @ApiProduces('image/png')
+  async imagePng(
+    @Param('id', ParseUUIDPipe) id: string,
+    @CurrentUser() user: JwtPayload,
+    @Res() res: Response,
+  ) {
+    const { buffer } = await this.qrService.getQrImageBuffer(id, toActor(user), 'png');
+    res.setHeader('Content-Type', 'image/png');
+    res.setHeader('Content-Disposition', `inline; filename="qr-${id}.png"`);
+    return res.send(buffer);
+  }
+
+  @Get(':id/image.svg')
+  @RequirePermissions(Permission.QR_READ)
+  @ApiOperation({ summary: 'Download QR matrix as SVG (locally generated)' })
+  @ApiProduces('image/svg+xml')
+  async imageSvg(
+    @Param('id', ParseUUIDPipe) id: string,
+    @CurrentUser() user: JwtPayload,
+    @Res() res: Response,
+  ) {
+    const { buffer } = await this.qrService.getQrImageBuffer(id, toActor(user), 'svg');
+    res.setHeader('Content-Type', 'image/svg+xml');
+    res.setHeader('Content-Disposition', `inline; filename="qr-${id}.svg"`);
+    return res.send(buffer);
+  }
+
+  @Get(':id/display.pdf')
+  @RequirePermissions(Permission.QR_READ)
+  @ApiOperation({ summary: 'Download TANQR Annex 2 merchant display as PDF' })
+  @ApiProduces('application/pdf')
+  async displayPdf(
+    @Param('id', ParseUUIDPipe) id: string,
+    @Query('paper_size') paperSize: string | undefined,
+    @CurrentUser() user: JwtPayload,
+    @Res() res: Response,
+  ) {
+    const buffer = await this.qrService.getDisplayPdf(id, toActor(user), paperSize);
+    res.setHeader('Content-Type', 'application/pdf');
+    res.setHeader('Content-Disposition', `inline; filename="qr-display-${id}.pdf"`);
+    return res.send(buffer);
   }
 
   @Get(':id/download')
@@ -100,19 +188,5 @@ export class QrController {
   @ApiOperation({ summary: 'Get QR code with latest payload' })
   getById(@Param('id', ParseUUIDPipe) id: string) {
     return this.qrRepository.findById(id);
-  }
-
-  @Post('static')
-  @RequirePermissions(Permission.QR_GENERATE)
-  @ApiOperation({ summary: 'Generate static TANQR (legacy body with merchantId)' })
-  createStaticLegacy(
-    @CurrentUser() user: JwtPayload,
-    @Body() dto: LegacyCreateStaticQrDto,
-  ) {
-    return this.qrService.generateStatic(dto.merchantId, toActor(user), {
-      forceRegenerate: dto.force_regenerate,
-      internalRoutingId: dto.internalRoutingId,
-      studentId: dto.studentId,
-    });
   }
 }

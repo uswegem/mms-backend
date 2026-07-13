@@ -62,6 +62,8 @@ describe('QrService', () => {
       getBucket: jest.fn().mockReturnValue('local'),
     };
     const audit = { record: jest.fn() };
+    const annex2 = { renderPdf: jest.fn(), renderSvg: jest.fn() };
+    const payloadValidator = { validateRequest: jest.fn() };
     const scope = {
       requirePermission: jest.fn(),
       assertCanAccessMerchant: jest.fn(),
@@ -76,6 +78,8 @@ describe('QrService', () => {
       validators as never,
       renderer as never,
       storage as never,
+      annex2 as never,
+      payloadValidator as never,
       audit as never,
       scope as never,
     );
