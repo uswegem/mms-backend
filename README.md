@@ -7,8 +7,6 @@ Enterprise-grade API: Clean Architecture · DDD · CQRS · JWT · RBAC · Audit 
 See [ARCHITECTURE.md](./ARCHITECTURE.md) for layer rules and module map.
 
 ## Quick start
-
-```bash
 cp .env.example .env   # fill DATABASE_URL + DIRECT_DATABASE_URL (Supabase)
 npm install
 npm run db:setup       # extensions → schema push → seed admin user
@@ -41,8 +39,6 @@ npm run start:dev
 | POST | `/auth/mfa/verify` | Enables MFA after setup |
 
 ## Docker
-
-```bash
 docker compose up -d    # Postgres + Redis + RabbitMQ (local)
 docker compose -f docker-compose.yml -f docker-compose.dev.yml up --build
 ```
