@@ -1,7 +1,8 @@
-import { Injectable } from '@nestjs/common';
+import { BadRequestException, Injectable } from '@nestjs/common';
 import { PrismaService } from '@infrastructure/database/prisma/prisma.service';
 import { MerchantAliasService } from '@modules/alias/application/services/merchant-alias.service';
 import { QrRepository } from '@modules/qr/infrastructure/persistence/qr.repository';
+import { QrValidators } from '@modules/qr/validators/qr.validators';
 
 @Injectable()
 export class MerchantIssuanceService {
@@ -9,6 +10,7 @@ export class MerchantIssuanceService {
     private readonly prisma: PrismaService,
     private readonly aliasService: MerchantAliasService,
     private readonly qrRepo: QrRepository,
+    private readonly qrValidators: QrValidators,
   ) {}
 
   async issueMerchantAliasAndQr(merchantId: string, actorId: string) {
@@ -16,6 +18,17 @@ export class MerchantIssuanceService {
       where: { id: merchantId },
       include: { profile: true, acquirer: true, merchantAlias: true },
     });
+
+    if (!merchant.profile?.city?.trim()) {
+      throw new BadRequestException(
+        'Merchant profile city is required before TANQR issuance',
+      );
+    }
+    if (!merchant.profile?.postalCode) {
+      throw new BadRequestException(
+        'Merchant profile postal code is required before TANQR issuance',
+      );
+    }
 
     let alias = merchant.merchantAlias;
     if (!alias) {
@@ -30,14 +43,25 @@ export class MerchantIssuanceService {
 
     let qr = existingQr;
     if (!qr && alias) {
+      const acquirerId5 = this.qrValidators.resolveAcquirerId5({
+        acquirerTipsAcquirerId5: merchant.acquirer.tipsAcquirerId5,
+      });
+      const tipsParticipantCode =
+        merchant.acquirer.tipsParticipantCode ?? acquirerId5.slice(-3);
+      const { merchantId15 } = await this.qrValidators.ensureTipsRegistration(
+        merchantId,
+        acquirerId5,
+        tipsParticipantCode,
+      );
       qr = await this.qrRepo.createStaticQr({
         merchantId,
         merchantName: merchant.tradingName,
-        city: merchant.profile?.city ?? 'Dar es Salaam',
-        postalCode: merchant.profile?.postalCode ?? '00000',
+        city: merchant.profile.city,
+        postalCode: merchant.profile.postalCode,
         mcc: merchant.mcc,
-        publicAlias: alias.alias8digit,
-        acquirerId5: merchant.acquirer.tipsAcquirerId5 ?? undefined,
+        merchantId15,
+        storeLabel: alias.alias8digit,
+        acquirerId5,
         createdBy: actorId,
       });
     }

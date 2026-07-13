@@ -971,6 +971,26 @@ model GlobalAliasSequence {
   @@map("global_alias_sequences")
 }
 
+/// Per-block sequence for the 8-digit Lipa Namba alias (AAA-CCCC-S). One row
+/// per allocated 3-digit acquirer block (780/781/782); allocation tries blocks
+/// in order and rolls over once a block's 4-digit space (0000-9999) is used up.
+model AliasBlockSequence {
+  block   String @id @db.Char(3)
+  lastSeq Int    @default(0) @map("last_seq")
+
+  @@map("alias_block_sequences")
+}
+
+/// Sequence for TANQR tag 26/02 Merchant ID (up to 15 digits) — distinct from
+/// the 8-digit Lipa Namba alias (tag 62/03). Assigned once per merchant via
+/// TipsRegistration.merchantId15 and never reassigned.
+model TipsMerchantIdSequence {
+  id      String @id @default("GLOBAL")
+  lastSeq Int    @default(0) @map("last_seq")
+
+  @@map("tips_merchant_id_sequences")
+}
+
 model MerchantAlias {
   id            String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
   merchantId    String   @unique @map("merchant_id") @db.Uuid
@@ -1095,7 +1115,8 @@ model QrPayloadVersion {
   version         Int
   tlvPayload      String   @map("tlv_payload") @db.Text
   crcValue        String   @map("crc_value") @db.Char(4)
-  tag26Alias      String?  @map("tag_26_02_alias") @db.VarChar(8)
+  tag26MerchantId String?  @map("tag_26_02_merchant_id") @db.VarChar(15)
+  tag62StoreLabel String?  @map("tag_62_03_store_label") @db.VarChar(8)
   tag62InternalId String?  @map("tag_62_05_internal_id") @db.VarChar(8)
   amount          Decimal? @db.Decimal(18, 2)
   billNumber      String?  @map("bill_number") @db.VarChar(25)

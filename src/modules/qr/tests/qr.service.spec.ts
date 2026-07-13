@@ -1,6 +1,8 @@
 import { QrType } from '@prisma/client';
 import { Permission } from '@infrastructure/auth/rbac/enums/permission.enum';
 import { QrService } from '../application/services/qr.service';
+import { buildTLV } from '../domain/tlv.builder';
+import { verifyTanqrCrc } from '../domain/tanqr-payload.builder';
 
 describe('QrService', () => {
   const actor = {
@@ -24,6 +26,7 @@ describe('QrService', () => {
     },
     profile: { city: 'DAR ES SALAAM', postalCode: '11000' },
     alias: '78000028',
+    merchantId15: '044000000000001',
     acquirerId5: '01044',
     tipsRegistered: true,
   };
@@ -95,12 +98,18 @@ describe('QrService', () => {
 
     expect(result.success).toBe(true);
     expect(result.qr_type).toBe('static');
-    expect(result.crc).toBe('35EA');
+    expect(verifyTanqrCrc(result.tlv_payload, result.crc)).toBe(true);
+    // Tag 26/02 carries the bank Merchant ID, tag 62/03 carries the distinct
+    // 8-digit Lipa Namba alias — the two must not be conflated.
+    expect(result.tlv_payload).toContain(buildTLV('02', merchantCtx.merchantId15));
+    expect(result.tlv_payload).toContain(buildTLV('03', merchantCtx.alias));
     expect(result.tlv_payload).toContain('78000028');
     expect(repository.persistQrGeneration).toHaveBeenCalledWith(
       expect.objectContaining({
         qrType: QrType.STATIC,
         poiMethod: '11',
+        tag26MerchantId: merchantCtx.merchantId15,
+        tag62StoreLabel: merchantCtx.alias,
         tag62InternalId: '00100014',
       }),
     );
@@ -144,13 +153,17 @@ describe('QrService', () => {
     expect(result.success).toBe(true);
     expect(result.qr_type).toBe('dynamic');
     expect(result.amount).toBe('150000');
-    expect(result.crc).toBe('A362');
+    expect(verifyTanqrCrc(result.tlv_payload, result.crc)).toBe(true);
+    expect(result.tlv_payload).toContain(buildTLV('02', merchantCtx.merchantId15));
+    expect(result.tlv_payload).toContain(buildTLV('03', merchantCtx.alias));
     expect(repository.persistQrGeneration).toHaveBeenCalledWith(
       expect.objectContaining({
         qrType: QrType.DYNAMIC,
         poiMethod: '12',
         amount: '150000',
         billNumber: 'TERM1-2024-00100014',
+        tag26MerchantId: merchantCtx.merchantId15,
+        tag62StoreLabel: merchantCtx.alias,
       }),
     );
     expect(audit.record).toHaveBeenCalledWith(

@@ -2,7 +2,7 @@ import { Injectable } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
 import { PrismaService } from '@infrastructure/database/prisma/prisma.service';
 import { buildEightDigitId, validateDamm } from '@shared/domain/alias/damm.util';
-import { LIPA_NAMBA_PREFIX } from '@shared/domain/alias/alias.constants';
+import { ALIAS_BLOCKS } from '@shared/domain/alias/alias.constants';
 
 type Tx = Prisma.TransactionClient;
 
@@ -10,14 +10,29 @@ type Tx = Prisma.TransactionClient;
 export class AliasRepository {
   constructor(private readonly prisma: PrismaService) {}
 
-  async nextGlobalSeq4(tx?: Tx): Promise<string> {
+  /**
+   * Atomically claims the next 4-digit sequence slot within a block, trying
+   * blocks in order and rolling over once a block's 0000-9999 space is used
+   * up. The increment and the < 9999 guard live in one UPDATE statement, so
+   * concurrent callers race on a Postgres row lock per block, not a global
+   * lock, and never hand out a slot past a block's capacity.
+   */
+  async allocateAliasSlot(tx?: Tx): Promise<{ block: string; seq4: string }> {
     const client = tx ?? this.prisma;
-    const row = await client.globalAliasSequence.upsert({
-      where: { id: 'GLOBAL' },
-      update: { lastSeq: { increment: 1 } },
-      create: { id: 'GLOBAL', lastSeq: 1 },
-    });
-    return row.lastSeq.toString().padStart(4, '0');
+    for (const block of ALIAS_BLOCKS) {
+      const rows = await client.$queryRaw<{ last_seq: number }[]>`
+        UPDATE alias_block_sequences
+        SET last_seq = last_seq + 1
+        WHERE block = ${block} AND last_seq < 9999
+        RETURNING last_seq
+      `;
+      if (rows.length > 0) {
+        return { block, seq4: rows[0].last_seq.toString().padStart(4, '0') };
+      }
+    }
+    throw new Error(
+      `All TANQR alias blocks (${ALIAS_BLOCKS.join('/')}) are exhausted — provision a new block`,
+    );
   }
 
   async generatePublicAlias(tx?: Tx): Promise<{
@@ -26,11 +41,11 @@ export class AliasRepository {
     aliasSeq4: string;
     checksum1: string;
   }> {
-    const seq4 = await this.nextGlobalSeq4(tx);
-    const alias8digit = buildEightDigitId(LIPA_NAMBA_PREFIX, seq4);
+    const { block, seq4 } = await this.allocateAliasSlot(tx);
+    const alias8digit = buildEightDigitId(block, seq4);
     return {
       alias8digit,
-      acquirerCode3: LIPA_NAMBA_PREFIX,
+      acquirerCode3: block,
       aliasSeq4: seq4,
       checksum1: alias8digit[7],
     };

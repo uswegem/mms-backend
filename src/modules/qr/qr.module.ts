@@ -13,6 +13,7 @@ import { QrRepository } from './infrastructure/persistence/qr.repository';
 import { MerchantQrController } from './presentation/http/merchant-qr.controller';
 import { QrController } from './presentation/http/qr.controller';
 import { QrValidators } from './validators/qr.validators';
+import { TipsMerchantIdRepository } from './domain/tips-merchant-id.repository';
 
 @Module({
   imports: [
@@ -31,7 +32,8 @@ import { QrValidators } from './validators/qr.validators';
     QrAnnex2DisplayService,
     QrPayloadValidatorService,
     QrValidators,
+    TipsMerchantIdRepository,
   ],
-  exports: [QrRepository, QrService],
+  exports: [QrRepository, QrService, QrValidators, TipsMerchantIdRepository],
 })
 export class QrModule {}

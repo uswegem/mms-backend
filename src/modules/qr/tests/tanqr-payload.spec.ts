@@ -1,4 +1,7 @@
-import { buildTanqrPayload } from '../domain/tanqr-payload.builder';
+import {
+  buildTanqrPayload,
+  verifyTanqrCrc,
+} from '../domain/tanqr-payload.builder';
 import { buildTLV } from '../domain/tlv.builder';
 import { crc16 } from '../domain/crc16';
 
@@ -34,7 +37,7 @@ describe('buildTanqrPayload', () => {
     const { tlvPayload, crcValue } = buildTanqrPayload({
       poiMethod: '11',
       acquirerId5: '01001',
-      publicAlias: '12345678',
+      merchantId: '12345678',
       mcc: '5814',
       merchantName: 'YN RESTAURANTS',
       city: 'DODOMA',
@@ -54,7 +57,7 @@ describe('buildTanqrPayload', () => {
     const { tlvPayload, crcValue } = buildTanqrPayload({
       poiMethod: '11',
       acquirerId5: '01044',
-      publicAlias: '78000028',
+      merchantId: '78000028',
       mcc: '8211',
       merchantName: 'MAPAMBANO SECONDARY',
       city: 'DAR ES SALAAM',
@@ -73,7 +76,7 @@ describe('buildTanqrPayload', () => {
     const { tlvPayload, crcValue } = buildTanqrPayload({
       poiMethod: '12',
       acquirerId5: '01044',
-      publicAlias: '78000028',
+      merchantId: '78000028',
       mcc: '8211',
       merchantName: 'MAPAMBANO SECONDARY',
       city: 'DAR ES SALAAM',
@@ -88,5 +91,60 @@ describe('buildTanqrPayload', () => {
       '00020101021226390014tz.go.bot.tips01050104402087800002852048211530383454061500005802TZ5919MAPAMBANO SECONDARY6013DAR ES SALAAM61051100062350119TERM1-2024-001000140508001000146304A362',
     );
     expect(crcValue).toBe('A362');
+  });
+
+  it('keeps the 15-digit Merchant ID (tag 26/02) and 8-digit alias (tag 62/03) as distinct values', () => {
+    const merchantId15 = '044000000012345';
+    const alias8digit = '78012349';
+    const { tlvPayload } = buildTanqrPayload({
+      poiMethod: '11',
+      acquirerId5: '01044',
+      merchantId: merchantId15,
+      mcc: '5814',
+      merchantName: 'TEST MERCHANT',
+      city: 'DODOMA',
+      postalCode: '41000',
+      additionalData: { storeLabel: alias8digit },
+    });
+
+    expect(merchantId15).not.toBe(alias8digit);
+    // Tag 26/02 carries the 15-digit Merchant ID inside the merchant account template.
+    expect(tlvPayload).toContain(buildTLV('02', merchantId15));
+    // Tag 62/03 carries the 8-digit alias inside the additional data template — a
+    // different value, not a truncation/derivation of the Merchant ID.
+    expect(tlvPayload).toContain(buildTLV('03', alias8digit));
+    expect(tlvPayload).not.toContain(buildTLV('02', alias8digit));
+  });
+});
+
+describe('verifyTanqrCrc', () => {
+  it('passes for a payload whose embedded CRC matches its own bytes', () => {
+    const { tlvPayload, crcValue } = buildTanqrPayload({
+      poiMethod: '11',
+      acquirerId5: '01044',
+      merchantId: '044000000012345',
+      mcc: '5814',
+      merchantName: 'TEST MERCHANT',
+      city: 'DODOMA',
+      postalCode: '41000',
+    });
+    expect(verifyTanqrCrc(tlvPayload, crcValue)).toBe(true);
+  });
+
+  it('fails when a single character of the payload is corrupted', () => {
+    const { tlvPayload, crcValue } = buildTanqrPayload({
+      poiMethod: '11',
+      acquirerId5: '01044',
+      merchantId: '044000000012345',
+      mcc: '5814',
+      merchantName: 'TEST MERCHANT',
+      city: 'DODOMA',
+      postalCode: '41000',
+    });
+    const corrupted =
+      tlvPayload.slice(0, 20) +
+      (tlvPayload[20] === '0' ? '1' : '0') +
+      tlvPayload.slice(21);
+    expect(verifyTanqrCrc(corrupted, crcValue)).toBe(false);
   });
 });

@@ -78,7 +78,6 @@ export class QrService {
       terminalId?: string;
       purpose?: string;
       forceRegenerate?: boolean;
-      storeLabel?: string;
       terminalLabel?: string;
       referenceLabel?: string;
       internalRoutingId?: string;
@@ -94,14 +93,16 @@ export class QrService {
 
     await this.assertStore(merchantId, options.storeId);
 
-    let storeLabel = options.storeLabel;
+    // Tag 62/03 Store Label is always the 8-digit Lipa Namba alias per the
+    // TANQR spec — it is not a caller-chosen or store-specific value. A
+    // specific terminal/POS point (if any) is identified via tag 62/07
+    // Terminal Label instead.
     let terminalLabel = options.terminalLabel;
     if (options.storeId) {
       const store = await this.prisma.merchantStore.findFirst({
         where: { id: options.storeId, merchantId },
       });
       if (store) {
-        storeLabel = storeLabel ?? store.storeCode;
         terminalLabel = terminalLabel ?? store.terminalId ?? undefined;
       }
     }
@@ -126,13 +127,13 @@ export class QrService {
     const { tlvPayload, crcValue } = buildTanqrPayload({
       poiMethod: '11',
       acquirerId5: ctx.acquirerId5,
-      publicAlias: ctx.alias,
+      merchantId: ctx.merchantId15,
       mcc,
       merchantName,
       city,
       postalCode,
       additionalData: {
-        storeLabel,
+        storeLabel: ctx.alias,
         terminalLabel,
         referenceLabel,
       },
@@ -153,7 +154,8 @@ export class QrService {
       version,
       tlvPayload,
       crcValue,
-      tag26Alias: ctx.alias,
+      tag26MerchantId: ctx.merchantId15,
+      tag62StoreLabel: ctx.alias,
       tag62InternalId: referenceLabel,
       purpose: options.purpose,
     });
@@ -206,7 +208,6 @@ export class QrService {
       storeId?: string;
       terminalId?: string;
       expiresInMinutes?: number;
-      storeLabel?: string;
       terminalLabel?: string;
       internalRoutingId?: string;
     },
@@ -232,7 +233,7 @@ export class QrService {
     const { tlvPayload, crcValue } = buildTanqrPayload({
       poiMethod: '12',
       acquirerId5: ctx.acquirerId5,
-      publicAlias: ctx.alias,
+      merchantId: ctx.merchantId15,
       mcc,
       merchantName,
       city,
@@ -240,7 +241,7 @@ export class QrService {
       amount,
       additionalData: {
         billNumber: options.billNumber,
-        storeLabel: options.storeLabel,
+        storeLabel: ctx.alias,
         terminalLabel: options.terminalLabel,
         referenceLabel,
       },
@@ -262,7 +263,8 @@ export class QrService {
       version: 1,
       tlvPayload,
       crcValue,
-      tag26Alias: ctx.alias,
+      tag26MerchantId: ctx.merchantId15,
+      tag62StoreLabel: ctx.alias,
       tag62InternalId: referenceLabel,
       amount,
       billNumber: options.billNumber,
@@ -417,7 +419,7 @@ export class QrService {
           qr_type: row.qrType.toLowerCase() as 'static' | 'dynamic',
           poi_method: row.poiMethod as '11' | '12',
           status,
-          alias: latest?.tag26Alias ?? alias ?? '',
+          alias: latest?.tag62StoreLabel ?? alias ?? '',
           merchant_name: merchant.tradingName,
           mcc: merchant.mcc,
           city: merchant.profile?.city ?? null,

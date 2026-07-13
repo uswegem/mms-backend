@@ -195,14 +195,29 @@ const ROLES: Array<{
 async function main() {
   const acquirer = await prisma.acquirer.upsert({
     where: { code: 'DEMO' },
-    update: {},
+    update: {
+      tipsAcquirerId5: '01044',
+      tipsParticipantCode: '044',
+    },
     create: {
       code: 'DEMO',
       legalName: 'Demo Acquirer Bank PLC',
       tradingName: 'Demo Acquirer',
       status: 'ACTIVE',
+      // TANQR acquirer category '01' (bank) + acquirer code '044' per the BoT
+      // TANQR Code Standard 2022.
+      tipsAcquirerId5: '01044',
+      tipsParticipantCode: '044',
     },
   });
+
+  for (const block of ['780', '781', '782']) {
+    await prisma.aliasBlockSequence.upsert({
+      where: { block },
+      update: {},
+      create: { block, lastSeq: 0 },
+    });
+  }
 
   for (const perm of PERMISSIONS) {
     await prisma.permission.upsert({

@@ -7,6 +7,7 @@ import { PrismaService } from '@infrastructure/database/prisma/prisma.service';
 import { buildEightDigitId } from '@shared/domain/alias/damm.util';
 import { AliasRepository } from '@modules/alias/infrastructure/persistence/alias.repository';
 import { QrRepository } from '@modules/qr/infrastructure/persistence/qr.repository';
+import { QrValidators } from '@modules/qr/validators/qr.validators';
 
 type Tx = Prisma.TransactionClient;
 
@@ -26,6 +27,7 @@ export class StudentAliasService {
     private readonly prisma: PrismaService,
     private readonly aliases: AliasRepository,
     private readonly qr: QrRepository,
+    private readonly qrValidators: QrValidators,
   ) {}
 
   async listStudents(merchantId: string) {
@@ -216,15 +218,39 @@ export class StudentAliasService {
       include: { profile: true, acquirer: true },
     });
 
+    if (!merchant.profile?.city?.trim()) {
+      throw new BadRequestException(
+        'Merchant profile city is required before TANQR issuance',
+      );
+    }
+    if (!merchant.profile?.postalCode) {
+      throw new BadRequestException(
+        'Merchant profile postal code is required before TANQR issuance',
+      );
+    }
+
+    const acquirerId5 = this.qrValidators.resolveAcquirerId5({
+      acquirerTipsAcquirerId5: merchant.acquirer.tipsAcquirerId5,
+    });
+    const tipsParticipantCode =
+      merchant.acquirer.tipsParticipantCode ?? acquirerId5.slice(-3);
+    const { merchantId15 } = await this.qrValidators.ensureTipsRegistration(
+      merchantId,
+      acquirerId5,
+      tipsParticipantCode,
+      tx,
+    );
+
     const qr = await this.qr.createStaticQr({
       merchantId,
       studentId,
       merchantName: merchant.tradingName,
-      city: merchant.profile?.city ?? 'Dar es Salaam',
-      postalCode: merchant.profile?.postalCode ?? '11000',
+      city: merchant.profile.city,
+      postalCode: merchant.profile.postalCode,
       mcc: merchant.mcc,
-      publicAlias: generated.alias8digit,
-      acquirerId5: merchant.acquirer.tipsAcquirerId5 ?? undefined,
+      merchantId15,
+      storeLabel: generated.alias8digit,
+      acquirerId5,
       internalRoutingId: internalId8digit,
       createdBy: actorId,
     }, tx);

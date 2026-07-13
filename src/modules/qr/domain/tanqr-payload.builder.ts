@@ -20,7 +20,10 @@ export interface TanqrAdditionalData {
 export interface TanqrPayloadInput {
   poiMethod: '11' | '12';
   acquirerId5: string;
-  publicAlias: string;
+  /** TANQR tag 26/02 — bank-assigned Merchant ID (up to 15 digits), NOT the
+   * 8-digit Lipa Namba alias. Pass the alias via additionalData.storeLabel
+   * (tag 62/03) instead. */
+  merchantId: string;
   mcc: string;
   merchantName: string;
   city: string;
@@ -38,8 +41,10 @@ export interface StaticTanqrInput {
   city: string;
   postalCode: string;
   mcc: string;
-  publicAlias: string;
-  acquirerId5?: string;
+  /** TANQR tag 26/02 — bank-assigned Merchant ID (up to 15 digits), NOT the
+   * 8-digit Lipa Namba alias. Pass the alias via storeLabel (tag 62/03) instead. */
+  merchantId: string;
+  acquirerId5: string;
   internalRoutingId?: string;
   poiMethod?: '11' | '12';
   amount?: string;
@@ -52,14 +57,14 @@ export interface StaticTanqrInput {
 function buildTipsMerchantAccountTemplate(
   domain: string,
   acquirerId5: string,
-  publicAlias: string,
+  merchantId: string,
 ): string {
   const normalizedAcquirer = validateAcquirerId5(acquirerId5);
-  const merchantId = validateMerchantId(publicAlias);
+  const normalizedMerchantId = validateMerchantId(merchantId);
   const children =
     buildTLV('00', domain) +
     buildTLV('01', normalizedAcquirer) +
-    buildTLV('02', merchantId);
+    buildTLV('02', normalizedMerchantId);
   return buildNestedTLV('26', children);
 }
 
@@ -87,7 +92,7 @@ export function buildTanqrPayload(input: TanqrPayloadInput): {
   const parts: string[] = [
     buildTLV('00', '01'),
     buildTLV('01', input.poiMethod),
-    buildTipsMerchantAccountTemplate(domain, input.acquirerId5, input.publicAlias),
+    buildTipsMerchantAccountTemplate(domain, input.acquirerId5, input.merchantId),
     buildTLV('52', input.mcc.padStart(4, '0').slice(0, 4)),
     buildTLV('53', currency),
   ];
@@ -133,8 +138,8 @@ export function buildStaticTanqrPayload(input: StaticTanqrInput): {
 
   return buildTanqrPayload({
     poiMethod: input.poiMethod ?? '11',
-    acquirerId5: input.acquirerId5 ?? '01044',
-    publicAlias: input.publicAlias,
+    acquirerId5: input.acquirerId5,
+    merchantId: input.merchantId,
     mcc: input.mcc,
     merchantName: input.merchantName,
     city: input.city,
@@ -143,4 +148,17 @@ export function buildStaticTanqrPayload(input: StaticTanqrInput): {
     additionalData:
       Object.keys(additionalData).length > 0 ? additionalData : undefined,
   });
+}
+
+/**
+ * Re-parses a built TANQR payload's own CRC by recomputing it from the payload
+ * bytes and comparing to the CRC that's embedded in it. Used as a self-check
+ * before persisting — catches builder bugs or data corruption before a bad
+ * payload ever reaches a merchant's printed QR code.
+ */
+export function verifyTanqrCrc(tlvPayload: string, expectedCrc: string): boolean {
+  if (tlvPayload.length < 8 || !tlvPayload.endsWith(expectedCrc)) return false;
+  const withoutCrcValue = tlvPayload.slice(0, -4);
+  if (!withoutCrcValue.endsWith('6304')) return false;
+  return crc16(withoutCrcValue) === expectedCrc;
 }

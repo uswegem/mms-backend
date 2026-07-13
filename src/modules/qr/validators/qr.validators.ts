@@ -3,10 +3,13 @@ import {
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
-import { MerchantStatus, QrType } from '@prisma/client';
+import { MerchantStatus, Prisma, QrType } from '@prisma/client';
 import { PrismaService } from '@infrastructure/database/prisma/prisma.service';
+import { TipsMerchantIdRepository } from '../domain/tips-merchant-id.repository';
 
 const ANS_PATTERN = /^[A-Za-z0-9 .,\-]*$/;
+
+type Tx = Prisma.TransactionClient;
 
 export interface MerchantQrContext {
   merchant: {
@@ -19,14 +22,77 @@ export interface MerchantQrContext {
     isSchool: boolean;
   };
   profile: { city: string; postalCode: string };
+  /** 8-digit Lipa Namba alias (AAA-CCCC-S) — TANQR tag 62/03. */
   alias: string;
+  /** Bank-assigned Merchant ID, up to 15 digits — TANQR tag 26/02. */
+  merchantId15: string;
   acquirerId5: string;
   tipsRegistered: boolean;
 }
 
 @Injectable()
 export class QrValidators {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly tipsIdRepo: TipsMerchantIdRepository,
+  ) {}
+
+  /**
+   * Resolves the TANQR 5-digit Acquirer ID for a merchant from whatever source
+   * has it, throwing rather than silently defaulting — a wrong acquirer ID
+   * misroutes real money, so there is no safe fallback value.
+   */
+  resolveAcquirerId5(params: {
+    tipsRegistrationAcquirerId5?: string | null;
+    acquirerTipsAcquirerId5?: string | null;
+    tpsResponsePayload?: unknown;
+  }): string {
+    const fromResponse = (
+      params.tpsResponsePayload as { acquirerId5?: string } | null
+    )?.acquirerId5;
+    const acquirerId5 =
+      params.tipsRegistrationAcquirerId5 ??
+      params.acquirerTipsAcquirerId5 ??
+      fromResponse;
+    if (!acquirerId5) {
+      throw new BadRequestException(
+        'TIPS registration data (acquirer ID) is not available locally for this merchant',
+      );
+    }
+    return acquirerId5;
+  }
+
+  /**
+   * Ensures a TipsRegistration row exists for the merchant, allocating a
+   * permanent 15-digit Merchant ID (tag 26/02) the first time — never
+   * reassigned afterwards. Callable independently of validateMerchantForQr
+   * since issuance services need this before a merchant alias exists.
+   */
+  async ensureTipsRegistration(
+    merchantId: string,
+    acquirerId5: string,
+    tipsParticipantCode: string,
+    tx?: Tx,
+  ): Promise<{ acquirerId5: string; merchantId15: string }> {
+    const client = tx ?? this.prisma;
+    const existing = await client.tipsRegistration.findUnique({
+      where: { merchantId },
+    });
+    if (existing) {
+      return {
+        acquirerId5: existing.acquirerId5,
+        merchantId15: existing.merchantId15,
+      };
+    }
+    const merchantId15 = await this.tipsIdRepo.allocateMerchantId15(
+      tipsParticipantCode,
+      tx,
+    );
+    const created = await client.tipsRegistration.create({
+      data: { merchantId, acquirerId5, merchantId15, status: 'PENDING' },
+    });
+    return { acquirerId5: created.acquirerId5, merchantId15: created.merchantId15 };
+  }
 
   validateQrType(type: string): QrType {
     const normalized = type.toUpperCase();
@@ -167,17 +233,19 @@ export class QrValidators {
     }).catch(() => null);
 
     const tpsIntegration = merchant.integrations[0];
-    const acquirerId5 =
-      tipsRegistration?.acquirerId5 ??
-      merchant.acquirer.tipsAcquirerId5 ??
-      (tpsIntegration?.responsePayload as { acquirerId5?: string } | null)
-        ?.acquirerId5;
+    const acquirerId5 = this.resolveAcquirerId5({
+      tipsRegistrationAcquirerId5: tipsRegistration?.acquirerId5,
+      acquirerTipsAcquirerId5: merchant.acquirer.tipsAcquirerId5,
+      tpsResponsePayload: tpsIntegration?.responsePayload,
+    });
 
-    if (!acquirerId5) {
-      throw new BadRequestException(
-        'TIPS registration data (acquirer ID) is not available locally for this merchant',
-      );
-    }
+    const tipsParticipantCode =
+      merchant.acquirer.tipsParticipantCode ?? acquirerId5.slice(-3);
+    const { merchantId15 } = await this.ensureTipsRegistration(
+      merchantId,
+      acquirerId5,
+      tipsParticipantCode,
+    );
 
     return {
       merchant: {
@@ -194,6 +262,7 @@ export class QrValidators {
         postalCode: merchant.profile.postalCode,
       },
       alias: aliasRow.alias8digit,
+      merchantId15,
       acquirerId5,
       tipsRegistered:
         tipsRegistration?.status === 'REGISTERED' ||

@@ -78,7 +78,7 @@ describe('dynamic TANQR sample', () => {
     const { tlvPayload, crcValue } = buildTanqrPayload({
       poiMethod: '12',
       acquirerId5: '01001',
-      publicAlias: '12345678',
+      merchantId: '12345678',
       mcc: '5814',
       merchantName: 'YN RESTAURANTS',
       city: 'DODOMA',
