@@ -19,4 +19,12 @@ export class CreateStudentDto {
   @IsString()
   @MaxLength(20)
   guardianPhone?: string;
+
+  @ApiPropertyOptional({
+    description:
+      'Client-generated key to safely retry this request without enrolling the student twice — prefer the Idempotency-Key header instead.',
+  })
+  @IsOptional()
+  @IsString()
+  idempotency_key?: string;
 }

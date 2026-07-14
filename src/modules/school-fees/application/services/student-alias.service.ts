@@ -4,6 +4,7 @@ import {
 } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
 import { PrismaService } from '@infrastructure/database/prisma/prisma.service';
+import { IdempotencyService } from '@infrastructure/idempotency/idempotency.service';
 import { buildEightDigitId } from '@shared/domain/alias/damm.util';
 import { AliasRepository } from '@modules/alias/infrastructure/persistence/alias.repository';
 import { SCHOOL_ALIAS_BLOCKS } from '@shared/domain/alias/alias.constants';
@@ -16,6 +17,9 @@ export interface CreateStudentInput {
   admissionNo: string;
   fullName: string;
   guardianPhone?: string;
+  /** Client-supplied key (e.g. Idempotency-Key header) to de-duplicate a
+   * retried POST — see IdempotencyService. */
+  idempotencyKey?: string;
 }
 
 export interface BulkStudentRow extends CreateStudentInput {
@@ -29,6 +33,7 @@ export class StudentAliasService {
     private readonly aliases: AliasRepository,
     private readonly qr: QrRepository,
     private readonly qrValidators: QrValidators,
+    private readonly idempotency: IdempotencyService,
   ) {}
 
   async listStudents(merchantId: string) {
@@ -40,6 +45,18 @@ export class StudentAliasService {
   }
 
   async createStudent(
+    merchantId: string,
+    input: CreateStudentInput,
+    actorId?: string,
+  ) {
+    return this.idempotency.withKey(
+      `student:create:${merchantId}`,
+      input.idempotencyKey,
+      () => this.doCreateStudent(merchantId, input, actorId),
+    );
+  }
+
+  private async doCreateStudent(
     merchantId: string,
     input: CreateStudentInput,
     actorId?: string,
@@ -60,24 +77,52 @@ export class StudentAliasService {
       );
     }
 
-    return this.prisma.$transaction(async (tx) => {
-      const student =
-        existing ??
-        (await tx.student.create({
-          data: {
-            merchantId,
-            admissionNo: input.admissionNo,
-            fullName: input.fullName,
-            guardianPhone: input.guardianPhone,
-          },
-        }));
+    try {
+      return await this.prisma.$transaction(async (tx) => {
+        const student =
+          existing ??
+          (await tx.student.create({
+            data: {
+              merchantId,
+              admissionNo: input.admissionNo,
+              fullName: input.fullName,
+              guardianPhone: input.guardianPhone,
+            },
+          }));
 
-      const alias = await this.issueStudentAlias(tx, merchantId, student.id, actorId);
-      return { student, alias };
-    });
+        const alias = await this.issueStudentAlias(tx, merchantId, student.id, actorId);
+        return { student, alias };
+      });
+    } catch (err) {
+      // Two concurrent requests can both pass the findFirst check above
+      // before either commits — the unique (merchantId, admissionNo)
+      // constraint is the real guard here. Without this, a genuine race
+      // (not just a same-key retry, which withKey already dedupes) would
+      // surface as a raw, unhandled Prisma error instead of the same
+      // friendly message a sequential duplicate gets.
+      if (err instanceof Prisma.PrismaClientKnownRequestError && err.code === 'P2002') {
+        throw new BadRequestException(
+          `Student with admission ${input.admissionNo} already enrolled`,
+        );
+      }
+      throw err;
+    }
   }
 
   async bulkUpload(
+    merchantId: string,
+    rows: BulkStudentRow[],
+    actorId?: string,
+    idempotencyKey?: string,
+  ) {
+    return this.idempotency.withKey(
+      `student:bulk:${merchantId}`,
+      idempotencyKey,
+      () => this.doBulkUpload(merchantId, rows, actorId),
+    );
+  }
+
+  private async doBulkUpload(
     merchantId: string,
     rows: BulkStudentRow[],
     actorId?: string,

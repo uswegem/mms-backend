@@ -2,6 +2,7 @@ import {
   Body,
   Controller,
   Get,
+  Headers,
   Param,
   ParseUUIDPipe,
   Post,
@@ -41,8 +42,18 @@ export class StudentsController {
     @CurrentUser() user: JwtPayload,
     @Param('merchantId', ParseUUIDPipe) merchantId: string,
     @Body() dto: CreateStudentDto,
+    @Headers('idempotency-key') idempotencyKeyHeader?: string,
   ) {
-    return this.students.createStudent(merchantId, dto, user.sub);
+    return this.students.createStudent(
+      merchantId,
+      {
+        admissionNo: dto.admissionNo,
+        fullName: dto.fullName,
+        guardianPhone: dto.guardianPhone,
+        idempotencyKey: idempotencyKeyHeader ?? dto.idempotency_key,
+      },
+      user.sub,
+    );
   }
 
   @Post('bulk')
@@ -54,9 +65,15 @@ export class StudentsController {
     @CurrentUser() user: JwtPayload,
     @Param('merchantId', ParseUUIDPipe) merchantId: string,
     @UploadedFile() file?: { buffer: Buffer },
-    @Body() body?: { csv?: string },
+    @Body() body?: { csv?: string; idempotency_key?: string },
+    @Headers('idempotency-key') idempotencyKeyHeader?: string,
   ) {
     const rows = await this.bulkUpload.parseInput(file, body?.csv);
-    return this.students.bulkUpload(merchantId, rows, user.sub);
+    return this.students.bulkUpload(
+      merchantId,
+      rows,
+      user.sub,
+      idempotencyKeyHeader ?? body?.idempotency_key,
+    );
   }
 }

@@ -1,5 +1,6 @@
 import { QrType } from '@prisma/client';
 import { Permission } from '@infrastructure/auth/rbac/enums/permission.enum';
+import { IdempotencyService } from '@infrastructure/idempotency/idempotency.service';
 import { QrService } from '../application/services/qr.service';
 import { QrPayloadValidatorService } from '../application/services/qr-payload-validator.service';
 import { buildTLV } from '../domain/tlv.builder';
@@ -98,7 +99,7 @@ describe('QrService', () => {
       payloadValidator as never,
       audit as never,
       scope as never,
-      redis as never,
+      new IdempotencyService(redis as never),
     );
 
     return { service, repository, validators, audit, scope, storage, renderer, prisma };
@@ -591,7 +592,7 @@ describe('QrService', () => {
 
     it('rejects a concurrent request sharing the same key while the first is still in flight', async () => {
       const redis = createMockRedis();
-      redis.store.set('qr:idem:merchant-1:dynamic:concurrent-1', '__PROCESSING__');
+      redis.store.set('idem:qr:dynamic:merchant-1:concurrent-1', '__PROCESSING__');
       const { service } = buildService({}, {}, redis);
 
       await expect(

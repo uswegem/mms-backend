@@ -5,6 +5,7 @@ import { AuthModule } from './auth/auth.module';
 import { AuditModule } from './audit/audit.module';
 import { HealthModule } from './health/health.module';
 import { RedisModule } from './cache/redis.module';
+import { IdempotencyModule } from './idempotency/idempotency.module';
 import { QueueModule } from './queue/queue.module';
 import { SupabaseModule } from './integrations/supabase/supabase.module';
 import { EmailModule } from './email/email.module';
@@ -19,6 +20,7 @@ import { PermissionsGuard } from './auth/rbac/guards/permissions.guard';
     AuditModule,
     HealthModule,
     RedisModule,
+    IdempotencyModule,
     QueueModule,
     SupabaseModule,
     EmailModule,
