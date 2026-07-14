@@ -1096,6 +1096,11 @@ model QrCode {
   status         QrStatus  @default(ACTIVE)
   poiMethod      String    @map("poi_method") @db.Char(2)
   currentVersion Int       @default(1) @map("current_version")
+  /// True when the latest regeneration changed the fixed amount (tag 54)
+  /// baked into a static QR — any previously printed sticker now encodes a
+  /// stale amount and needs reprinting. Cleared via the acknowledge-reprint
+  /// action once ops confirms the new sticker is in place.
+  reprintRequired Boolean  @default(false) @map("reprint_required")
   expiresAt      DateTime? @map("expires_at") @db.Timestamptz(6)
   revokedAt      DateTime? @map("revoked_at") @db.Timestamptz(6)
   createdAt      DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
@@ -1122,6 +1127,7 @@ model QrPayloadVersion {
   tag26MerchantId String?  @map("tag_26_02_merchant_id") @db.VarChar(15)
   tag62StoreLabel String?  @map("tag_62_03_store_label") @db.VarChar(8)
   tag62InternalId String?  @map("tag_62_05_internal_id") @db.VarChar(8)
+  tag62TerminalLabel String? @map("tag_62_07_terminal_label") @db.VarChar(25)
   amount          Decimal? @db.Decimal(18, 2)
   billNumber      String?  @map("bill_number") @db.VarChar(25)
   referenceLabel  String?  @map("reference_label") @db.VarChar(25)

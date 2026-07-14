@@ -50,6 +50,7 @@ export class MerchantQrController {
       terminalId: dto.terminal_id,
       purpose: dto.purpose,
       forceRegenerate: dto.force_regenerate ?? false,
+      amount: dto.amount,
     });
   }
 

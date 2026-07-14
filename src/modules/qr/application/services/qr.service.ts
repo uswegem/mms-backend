@@ -32,10 +32,16 @@ export interface StaticQrResult {
   version: number;
   merchant_id: string;
   alias: string;
+  /** Fixed amount baked into the payload (tag 54), if any — a static QR with
+   * an amount is still reusable/non-expiring, unlike a dynamic QR. */
+  amount?: string;
   tlv_payload: string;
   crc: string;
   assets: QrAssetMap;
   regenerated?: boolean;
+  /** True when a previously printed sticker for this QR now encodes a stale
+   * amount and needs reprinting — see acknowledgeReprint to clear it. */
+  reprint_required: boolean;
 }
 
 export interface DynamicQrResult {
@@ -82,6 +88,10 @@ export class QrService {
       referenceLabel?: string;
       internalRoutingId?: string;
       studentId?: string;
+      /** Fixed amount (tag 54) baked into the static payload, e.g. a school's
+       * termly fee. The QR stays static/non-expiring — this is distinct from
+       * a dynamic QR's amount, which always comes with an expiry. */
+      amount?: string | number;
     } = {},
   ): Promise<StaticQrResult> {
     this.scope.requirePermission(actor, Permission.QR_GENERATE);
@@ -112,7 +122,19 @@ export class QrService {
       options.terminalId,
     );
 
-    if (existing && !options.forceRegenerate) {
+    const amount =
+      options.amount !== undefined
+        ? this.validators.validateAmount(options.amount)
+        : undefined;
+    const existingAmount = existing?.payloadVersions[0]?.amount;
+    // A request for a different fixed amount than what's currently baked in
+    // must not be silently swallowed by the "return the existing static QR"
+    // fast path — it needs a new version, same as an explicit regenerate.
+    const amountChanged =
+      Boolean(existing) &&
+      Number(amount ?? 0) !== Number(existingAmount ?? 0);
+
+    if (existing && !options.forceRegenerate && !amountChanged) {
       return this.toStaticResponse(existing, ctx.alias, false);
     }
 
@@ -132,6 +154,7 @@ export class QrService {
       merchantName,
       city,
       postalCode,
+      amount,
       additionalData: {
         storeLabel: ctx.alias,
         terminalLabel,
@@ -139,7 +162,7 @@ export class QrService {
       },
     });
 
-    const isRegenerate = Boolean(existing && options.forceRegenerate);
+    const isRegenerate = Boolean(existing) && (options.forceRegenerate || amountChanged);
     const version = isRegenerate ? existing!.currentVersion + 1 : 1;
 
     const qrRecord = await this.repository.persistQrGeneration({
@@ -157,7 +180,10 @@ export class QrService {
       tag26MerchantId: ctx.merchantId15,
       tag62StoreLabel: ctx.alias,
       tag62InternalId: referenceLabel,
+      tag62TerminalLabel: terminalLabel,
+      amount,
       purpose: options.purpose,
+      reprintRequired: amountChanged,
     });
 
     const assets = await this.renderAndStore(
@@ -179,8 +205,30 @@ export class QrService {
         storeId: options.storeId ?? null,
         terminalId: options.terminalId ?? null,
         purpose: options.purpose ?? null,
+        amount: amount ?? null,
       },
     });
+
+    if (amountChanged) {
+      // A previously printed physical sticker for this merchant/store/
+      // terminal now bakes in a stale amount — nothing in this system (or
+      // the external TIPS switch) rejects that old sticker, it would just
+      // silently authorize payment at the wrong amount. Surface it as its
+      // own audit event so it's easy to alert/report on separately from a
+      // routine regeneration, in addition to the reprintRequired flag.
+      await this.audit.record({
+        actorId: actor.sub,
+        action: 'QR_REPRINT_REQUIRED',
+        entityType: 'qr_code',
+        entityId: qrRecord.id,
+        metadata: {
+          merchantId,
+          version,
+          previousAmount: existingAmount != null ? existingAmount.toString() : null,
+          newAmount: amount ?? null,
+        },
+      });
+    }
 
     return {
       success: true,
@@ -191,10 +239,12 @@ export class QrService {
       version,
       merchant_id: merchantId,
       alias: ctx.alias,
+      amount,
       tlv_payload: tlvPayload,
       crc: crcValue,
       assets,
       regenerated: isRegenerate,
+      reprint_required: amountChanged || Boolean(existing?.reprintRequired),
     };
   }
 
@@ -266,6 +316,7 @@ export class QrService {
       tag26MerchantId: ctx.merchantId15,
       tag62StoreLabel: ctx.alias,
       tag62InternalId: referenceLabel,
+      tag62TerminalLabel: options.terminalLabel,
       amount,
       billNumber: options.billNumber,
       referenceLabel,
@@ -360,10 +411,12 @@ export class QrService {
       version: latest.version,
       merchant_id: existing.merchantId,
       alias,
+      amount: latest.amount != null ? latest.amount.toString() : undefined,
       tlv_payload: latest.tlvPayload,
       crc: latest.crcValue,
       assets,
       regenerated,
+      reprint_required: existing.reprintRequired,
     };
   }
 
@@ -431,6 +484,7 @@ export class QrService {
           tlv_payload: latest?.tlvPayload ?? '',
           created_at: row.createdAt.toISOString(),
           expires_at: row.expiresAt?.toISOString() ?? null,
+          reprint_required: row.reprintRequired,
           assets,
         };
       }),
@@ -552,7 +606,7 @@ export class QrService {
     const { buffer: qrPng } = await this.getQrImageBuffer(qrId, actor, 'png');
     const alias =
       extractTag62SubTag(latest.tlvPayload, '03') ??
-      latest.tag26Alias ??
+      latest.tag62StoreLabel ??
       '--------';
 
     return this.annex2.renderPdf({
@@ -586,11 +640,40 @@ export class QrService {
     return { success: true, qr_id: qrId, status: 'disabled' };
   }
 
-  async regenerateQr(qrId: string, actor: ActorContext) {
+  /**
+   * Clears the reprintRequired flag once ops/branch staff confirm the new
+   * sticker (reflecting the current fixed amount) has physically replaced
+   * the stale one in the field.
+   */
+  async acknowledgeReprint(qrId: string, actor: ActorContext) {
     this.scope.requirePermission(actor, Permission.QR_GENERATE);
     const qr = await this.prisma.qrCode.findUniqueOrThrow({
       where: { id: qrId },
       include: { merchant: true },
+    });
+    this.scope.assertCanAccessMerchant(actor, {
+      id: qr.merchantId,
+      acquirerId: qr.merchant.acquirerId,
+    });
+    await this.repository.clearReprintFlag(qrId);
+    await this.audit.record({
+      actorId: actor.sub,
+      action: 'QR_REPRINT_ACKNOWLEDGED',
+      entityType: 'qr_code',
+      entityId: qrId,
+      metadata: { merchantId: qr.merchantId },
+    });
+    return { success: true, qr_id: qrId, reprint_required: false };
+  }
+
+  async regenerateQr(qrId: string, actor: ActorContext) {
+    this.scope.requirePermission(actor, Permission.QR_GENERATE);
+    const qr = await this.prisma.qrCode.findUniqueOrThrow({
+      where: { id: qrId },
+      include: {
+        merchant: true,
+        payloadVersions: { orderBy: { version: 'desc' }, take: 1 },
+      },
     });
     if (qr.qrType !== QrType.STATIC) {
       throw new BadRequestException('Only static QR codes can be regenerated');
@@ -599,10 +682,20 @@ export class QrService {
       id: qr.merchantId,
       acquirerId: qr.merchant.acquirerId,
     });
+
+    // This endpoint only rebuilds the payload from current merchant data
+    // (e.g. a trading-name or postal-code correction) — it exposes no way to
+    // change amount/reference/terminal label, so whatever was already baked
+    // in must be carried forward. Without this, regenerating silently
+    // stripped a static QR's fixed amount (and reference/terminal labels).
+    const latest = qr.payloadVersions[0];
     return this.generateStatic(qr.merchantId, actor, {
       storeId: qr.storeId ?? undefined,
       terminalId: qr.terminalId ?? undefined,
       forceRegenerate: true,
+      amount: latest?.amount != null ? latest.amount.toString() : undefined,
+      internalRoutingId: latest?.tag62InternalId ?? undefined,
+      terminalLabel: latest?.tag62TerminalLabel ?? undefined,
     });
   }
 

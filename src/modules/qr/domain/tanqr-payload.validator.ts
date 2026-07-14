@@ -115,10 +115,12 @@ export function validateTanqrFieldInput(
   validateMerchantCity(input.city);
   validatePostalCodeValue(input.postalCode);
 
-  if (input.poiMethod === '12') {
-    if (!input.amount) {
-      throw new TlvValidationError('Dynamic QR requires transaction amount (tag 54)');
-    }
+  if (input.poiMethod === '12' && !input.amount) {
+    throw new TlvValidationError('Dynamic QR requires transaction amount (tag 54)');
+  }
+  // Amount is optional on a static QR but must still be well-formed when a
+  // fixed amount is baked in (e.g. a school's termly fee).
+  if (input.amount) {
     validateTransactionAmount(input.amount);
   }
 

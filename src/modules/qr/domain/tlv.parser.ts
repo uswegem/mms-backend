@@ -3,10 +3,17 @@ export function extractTag62SubTag(
   tlvPayload: string,
   subTag: string,
 ): string | null {
-  const tag62Match = tlvPayload.match(/62(\d{2})(\d+)/);
-  if (!tag62Match) return null;
+  // Capture only the 2-digit length here — the content itself is sliced by
+  // that declared length below, not matched via a digit-only regex, since
+  // tag 62 sub-fields (e.g. an alphanumeric terminal label) aren't
+  // guaranteed to be numeric.
+  const tag62Match = tlvPayload.match(/62(\d{2})/);
+  if (!tag62Match || tag62Match.index === undefined) return null;
 
-  const content = tag62Match[2].slice(0, Number(tag62Match[1]));
+  const length = Number(tag62Match[1]);
+  const contentStart = tag62Match.index + tag62Match[0].length;
+  const content = tlvPayload.slice(contentStart, contentStart + length);
+  if (content.length < length) return null;
   let index = 0;
 
   while (index + 4 <= content.length) {

@@ -97,10 +97,13 @@ export function buildTanqrPayload(input: TanqrPayloadInput): {
     buildTLV('53', currency),
   ];
 
-  if (input.poiMethod === '12') {
-    if (!input.amount) {
-      throw new Error('Dynamic TANQR requires transaction amount (tag 54)');
-    }
+  if (input.poiMethod === '12' && !input.amount) {
+    throw new Error('Dynamic TANQR requires transaction amount (tag 54)');
+  }
+  // Tag 54 is optional on a static QR (POI method 11) — a fixed-fee QR (e.g.
+  // a school's termly fee, printed once) bakes the amount in without making
+  // the QR dynamic/expiring.
+  if (input.amount) {
     parts.push(buildTLV('54', input.amount));
   }
 
@@ -144,7 +147,7 @@ export function buildStaticTanqrPayload(input: StaticTanqrInput): {
     merchantName: input.merchantName,
     city: input.city,
     postalCode: input.postalCode,
-    amount: input.poiMethod === '12' ? input.amount : undefined,
+    amount: input.amount,
     additionalData:
       Object.keys(additionalData).length > 0 ? additionalData : undefined,
   });

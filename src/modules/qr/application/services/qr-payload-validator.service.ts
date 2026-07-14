@@ -36,7 +36,7 @@ export class QrPayloadValidatorService {
     validateTanqrFieldInput({
       poiMethod: input.poiMethod,
       acquirerId5: input.acquirerId5,
-      merchantId: input.publicAlias,
+      merchantId: input.merchantId,
       mcc: input.mcc,
       merchantName: input.merchantName,
       city: input.city,
@@ -80,7 +80,7 @@ export class QrPayloadValidatorService {
     const built = this.buildAndVerify({
       poiMethod: dto.poi_method,
       acquirerId5: dto.acquirer_id5,
-      publicAlias: dto.merchant_id,
+      merchantId: dto.merchant_id,
       mcc: dto.mcc ?? '0000',
       merchantName: dto.merchant_name ?? '',
       city: dto.city ?? '',

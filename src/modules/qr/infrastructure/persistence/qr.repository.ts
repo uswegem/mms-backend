@@ -39,11 +39,15 @@ export interface PersistQrInput {
   tag26MerchantId: string;
   tag62StoreLabel?: string;
   tag62InternalId?: string;
+  tag62TerminalLabel?: string;
   amount?: string;
   billNumber?: string;
   referenceLabel?: string;
   expiresAt?: Date;
   purpose?: string;
+  /** Set true when this regeneration changed a static QR's fixed amount —
+   * flags that any previously printed sticker now encodes a stale amount. */
+  reprintRequired?: boolean;
 }
 
 type Tx = Prisma.TransactionClient;
@@ -142,7 +146,14 @@ export class QrRepository {
       if (qrId) {
         await tx.qrCode.update({
           where: { id: qrId },
-          data: { currentVersion: input.version },
+          data: {
+            currentVersion: input.version,
+            // Only ever flip true here — cleared exclusively via the
+            // explicit acknowledge-reprint action, so an unrelated
+            // regeneration (e.g. a trading-name fix) can't silently drop a
+            // still-unacknowledged reprint alert from an earlier amount change.
+            ...(input.reprintRequired ? { reprintRequired: true } : {}),
+          },
         });
       } else {
         const created = await tx.qrCode.create({
@@ -171,6 +182,7 @@ export class QrRepository {
           tag26MerchantId: input.tag26MerchantId,
           tag62StoreLabel: input.tag62StoreLabel,
           tag62InternalId: input.tag62InternalId,
+          tag62TerminalLabel: input.tag62TerminalLabel,
           amount: input.amount ? new Prisma.Decimal(input.amount) : undefined,
           billNumber: input.billNumber,
           referenceLabel: input.referenceLabel,
@@ -278,6 +290,13 @@ export class QrRepository {
         status: QrStatus.REVOKED,
         revokedAt: new Date(),
       },
+    });
+  }
+
+  async clearReprintFlag(qrId: string) {
+    return this.prisma.qrCode.update({
+      where: { id: qrId },
+      data: { reprintRequired: false },
     });
   }
 

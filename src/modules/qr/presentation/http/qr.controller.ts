@@ -64,6 +64,7 @@ export class QrController {
       forceRegenerate: dto.force_regenerate,
       internalRoutingId: dto.internalRoutingId,
       studentId: dto.studentId,
+      amount: dto.amount,
     });
   }
 
@@ -181,6 +182,19 @@ export class QrController {
     @CurrentUser() user: JwtPayload,
   ) {
     return this.qrService.disableQr(id, toActor(user));
+  }
+
+  @Patch(':id/acknowledge-reprint')
+  @RequirePermissions(Permission.QR_GENERATE)
+  @ApiOperation({
+    summary:
+      'Clear the reprint-required flag once the new sticker has replaced a stale one in the field',
+  })
+  acknowledgeReprint(
+    @Param('id', ParseUUIDPipe) id: string,
+    @CurrentUser() user: JwtPayload,
+  ) {
+    return this.qrService.acknowledgeReprint(id, toActor(user));
   }
 
   @Get(':id')

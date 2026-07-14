@@ -93,6 +93,59 @@ describe('buildTanqrPayload', () => {
     expect(crcValue).toBe('A362');
   });
 
+  it('omits tag 54 entirely for a plain static QR without an amount', () => {
+    const fields = {
+      poiMethod: '11' as const,
+      acquirerId5: '01044',
+      merchantId: '78000028',
+      mcc: '8211',
+      merchantName: 'MAPAMBANO SECONDARY',
+      city: 'DAR ES SALAAM',
+      postalCode: '11000',
+    };
+    const withoutAmount = buildTanqrPayload(fields);
+    const withAmount = buildTanqrPayload({ ...fields, amount: '150000' });
+
+    expect(withAmount.tlvPayload).toContain(buildTLV('54', '150000'));
+    expect(withoutAmount.tlvPayload).not.toContain(buildTLV('54', '150000'));
+    expect(verifyTanqrCrc(withoutAmount.tlvPayload, withoutAmount.crcValue)).toBe(true);
+    expect(verifyTanqrCrc(withAmount.tlvPayload, withAmount.crcValue)).toBe(true);
+  });
+
+  it('builds a static QR with a fixed amount (tag 54) — e.g. a school termly fee — and stays POI method 11', () => {
+    const { tlvPayload, crcValue } = buildTanqrPayload({
+      poiMethod: '11',
+      acquirerId5: '01044',
+      merchantId: '78000028',
+      mcc: '8211',
+      merchantName: 'MAPAMBANO SECONDARY',
+      city: 'DAR ES SALAAM',
+      postalCode: '11000',
+      amount: '150000',
+      additionalData: {
+        referenceLabel: '00100014',
+      },
+    });
+
+    expect(tlvPayload).toContain(buildTLV('01', '11'));
+    expect(tlvPayload).toContain(buildTLV('54', '150000'));
+    expect(verifyTanqrCrc(tlvPayload, crcValue)).toBe(true);
+  });
+
+  it('still requires an amount for dynamic (POI method 12) — unchanged by static-amount support', () => {
+    expect(() =>
+      buildTanqrPayload({
+        poiMethod: '12',
+        acquirerId5: '01044',
+        merchantId: '78000028',
+        mcc: '8211',
+        merchantName: 'MAPAMBANO SECONDARY',
+        city: 'DAR ES SALAAM',
+        postalCode: '11000',
+      }),
+    ).toThrow('Dynamic TANQR requires transaction amount (tag 54)');
+  });
+
   it('keeps the 15-digit Merchant ID (tag 26/02) and 8-digit alias (tag 62/03) as distinct values', () => {
     const merchantId15 = '044000000012345';
     const alias8digit = '78012349';

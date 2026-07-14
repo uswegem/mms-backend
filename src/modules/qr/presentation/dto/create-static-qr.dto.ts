@@ -21,4 +21,13 @@ export class CreateStaticQrDto {
   @IsOptional()
   @IsBoolean()
   force_regenerate?: boolean;
+
+  @ApiPropertyOptional({
+    description:
+      'Fixed amount (tag 54) to bake into the static QR, e.g. a school\'s termly fee. The QR stays static/non-expiring.',
+    example: '150000',
+  })
+  @IsOptional()
+  @IsString()
+  amount?: string;
 }

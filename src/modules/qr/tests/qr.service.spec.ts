@@ -2,7 +2,7 @@ import { QrType } from '@prisma/client';
 import { Permission } from '@infrastructure/auth/rbac/enums/permission.enum';
 import { QrService } from '../application/services/qr.service';
 import { buildTLV } from '../domain/tlv.builder';
-import { verifyTanqrCrc } from '../domain/tanqr-payload.builder';
+import { buildTanqrPayload, verifyTanqrCrc } from '../domain/tanqr-payload.builder';
 
 describe('QrService', () => {
   const actor = {
@@ -31,7 +31,10 @@ describe('QrService', () => {
     tipsRegistered: true,
   };
 
-  function buildService(overrides: Partial<Record<string, unknown>> = {}) {
+  function buildService(
+    overrides: Partial<Record<string, unknown>> = {},
+    prismaOverrides: Partial<Record<string, unknown>> = {},
+  ) {
     const repository = {
       findActiveStaticQr: jest.fn().mockResolvedValue(null),
       persistQrGeneration: jest.fn().mockResolvedValue({
@@ -41,6 +44,7 @@ describe('QrService', () => {
       }),
       saveRenderAssets: jest.fn(),
       getAssetUrls: jest.fn(),
+      clearReprintFlag: jest.fn(),
       ...overrides,
     };
     const validators = {
@@ -73,6 +77,7 @@ describe('QrService', () => {
     };
     const prisma = {
       merchantStore: { findFirst: jest.fn() },
+      ...prismaOverrides,
     };
 
     const service = new QrService(
@@ -87,7 +92,7 @@ describe('QrService', () => {
       scope as never,
     );
 
-    return { service, repository, validators, audit, scope, storage, renderer };
+    return { service, repository, validators, audit, scope, storage, renderer, prisma };
   }
 
   it('generates static QR with golden school fields', async () => {
@@ -123,6 +128,7 @@ describe('QrService', () => {
       id: 'qr-existing',
       merchantId: 'merchant-1',
       status: 'ACTIVE',
+      reprintRequired: false,
       payloadVersions: [
         {
           version: 1,
@@ -139,6 +145,248 @@ describe('QrService', () => {
     const result = await service.generateStatic('merchant-1', actor, {});
     expect(result.qr_id).toBe('qr-existing');
     expect(repository.persistQrGeneration).not.toHaveBeenCalled();
+    expect(result.reprint_required).toBe(false);
+  });
+
+  it('generates a static QR with a fixed amount (tag 54) and no expiry — e.g. a school termly fee', async () => {
+    const { service, repository, audit } = buildService();
+    const result = await service.generateStatic('merchant-1', actor, {
+      amount: '150000',
+    });
+
+    expect(result.success).toBe(true);
+    expect(result.qr_type).toBe('static');
+    expect(result.amount).toBe('150000');
+    expect(verifyTanqrCrc(result.tlv_payload, result.crc)).toBe(true);
+    expect(result.tlv_payload).toContain(buildTLV('54', '150000'));
+
+    expect(repository.persistQrGeneration).toHaveBeenCalledWith(
+      expect.objectContaining({
+        qrType: QrType.STATIC,
+        poiMethod: '11',
+        amount: '150000',
+      }),
+    );
+    const persistedArgs = repository.persistQrGeneration.mock.calls[0][0];
+    expect(persistedArgs.expiresAt).toBeUndefined();
+
+    expect(audit.record).toHaveBeenCalledWith(
+      expect.objectContaining({
+        action: 'QR_STATIC_CREATED',
+        metadata: expect.objectContaining({ amount: '150000' }),
+      }),
+    );
+  });
+
+  it('creates a new version and flags reprint_required when the requested fixed amount differs from the existing static QR', async () => {
+    const existing = {
+      id: 'qr-existing',
+      merchantId: 'merchant-1',
+      status: 'ACTIVE',
+      currentVersion: 1,
+      reprintRequired: false,
+      payloadVersions: [
+        {
+          version: 1,
+          tlvPayload: 'old-payload',
+          crcValue: '35EA',
+          amount: '100000',
+        },
+      ],
+    };
+    const { service, repository, audit } = buildService({
+      findActiveStaticQr: jest.fn().mockResolvedValue(existing),
+    });
+
+    const result = await service.generateStatic('merchant-1', actor, {
+      amount: '150000',
+    });
+
+    expect(repository.persistQrGeneration).toHaveBeenCalledWith(
+      expect.objectContaining({
+        existingQrId: 'qr-existing',
+        version: 2,
+        amount: '150000',
+        reprintRequired: true,
+      }),
+    );
+    expect(result.regenerated).toBe(true);
+    expect(result.amount).toBe('150000');
+    expect(result.reprint_required).toBe(true);
+    // A dedicated alert event, distinct from the routine QR_REGENERATED
+    // audit entry — a previously printed sticker is now stale.
+    expect(audit.record).toHaveBeenCalledWith(
+      expect.objectContaining({
+        action: 'QR_REPRINT_REQUIRED',
+        metadata: expect.objectContaining({
+          previousAmount: '100000',
+          newAmount: '150000',
+        }),
+      }),
+    );
+  });
+
+  it('does not flag reprint_required for a plain regeneration with no amount change (e.g. a trading-name fix)', async () => {
+    const existing = {
+      id: 'qr-existing',
+      merchantId: 'merchant-1',
+      status: 'ACTIVE',
+      currentVersion: 1,
+      reprintRequired: false,
+      payloadVersions: [
+        {
+          version: 1,
+          tlvPayload: 'old-payload',
+          crcValue: '35EA',
+        },
+      ],
+    };
+    const { service, repository, audit } = buildService({
+      findActiveStaticQr: jest.fn().mockResolvedValue(existing),
+    });
+
+    const result = await service.generateStatic('merchant-1', actor, {
+      forceRegenerate: true,
+    });
+
+    expect(repository.persistQrGeneration).toHaveBeenCalledWith(
+      expect.objectContaining({ existingQrId: 'qr-existing', version: 2 }),
+    );
+    const persistedArgs = repository.persistQrGeneration.mock.calls[0][0];
+    expect(persistedArgs.reprintRequired).toBe(false);
+    expect(result.reprint_required).toBe(false);
+    expect(audit.record).not.toHaveBeenCalledWith(
+      expect.objectContaining({ action: 'QR_REPRINT_REQUIRED' }),
+    );
+  });
+
+  it('acknowledgeReprint clears the flag and records an audit event', async () => {
+    const { service, repository, audit, prisma } = buildService(
+      {},
+      {
+        qrCode: {
+          findUniqueOrThrow: jest.fn().mockResolvedValue({
+            id: 'qr-existing',
+            merchantId: 'merchant-1',
+            merchant: { id: 'merchant-1', acquirerId: 'acq-1' },
+          }),
+        },
+      },
+    );
+
+    const result = await service.acknowledgeReprint('qr-existing', actor);
+
+    expect(repository.clearReprintFlag).toHaveBeenCalledWith('qr-existing');
+    expect(result).toEqual({
+      success: true,
+      qr_id: 'qr-existing',
+      reprint_required: false,
+    });
+    expect(audit.record).toHaveBeenCalledWith(
+      expect.objectContaining({ action: 'QR_REPRINT_ACKNOWLEDGED' }),
+    );
+    expect((prisma as any).qrCode.findUniqueOrThrow).toHaveBeenCalled();
+  });
+
+  it('regenerateQr preserves the existing fixed amount, reference label, and terminal label instead of stripping them', async () => {
+    const oldBuilt = buildTanqrPayload({
+      poiMethod: '11',
+      acquirerId5: merchantCtx.acquirerId5,
+      merchantId: merchantCtx.merchantId15,
+      mcc: '8211',
+      merchantName: 'MAPAMBANO SECONDARY',
+      city: 'DAR ES SALAAM',
+      postalCode: '11000',
+      amount: '150000',
+      additionalData: {
+        storeLabel: merchantCtx.alias,
+        terminalLabel: 'POS-07',
+        referenceLabel: '00100014',
+      },
+    });
+    const latestVersion = {
+      version: 1,
+      tlvPayload: oldBuilt.tlvPayload,
+      crcValue: oldBuilt.crcValue,
+      amount: '150000',
+      tag62InternalId: '00100014',
+      tag62TerminalLabel: 'POS-07',
+    };
+    const existing = {
+      id: 'qr-existing',
+      merchantId: 'merchant-1',
+      status: 'ACTIVE',
+      currentVersion: 1,
+      reprintRequired: false,
+      payloadVersions: [latestVersion],
+    };
+
+    const { service, repository, audit } = buildService(
+      { findActiveStaticQr: jest.fn().mockResolvedValue(existing) },
+      {
+        qrCode: {
+          findUniqueOrThrow: jest.fn().mockResolvedValue({
+            id: 'qr-existing',
+            merchantId: 'merchant-1',
+            qrType: QrType.STATIC,
+            storeId: null,
+            terminalId: null,
+            merchant: { id: 'merchant-1', acquirerId: 'acq-1' },
+            payloadVersions: [latestVersion],
+          }),
+        },
+      },
+    );
+
+    const result = await service.regenerateQr('qr-existing', actor);
+
+    expect(repository.persistQrGeneration).toHaveBeenCalledWith(
+      expect.objectContaining({
+        amount: '150000',
+        tag62InternalId: '00100014',
+        tag62TerminalLabel: 'POS-07',
+        reprintRequired: false,
+      }),
+    );
+    expect(result.tlv_payload).toContain(buildTLV('54', '150000'));
+    expect(result.tlv_payload).toContain(buildTLV('07', 'POS-07'));
+    expect(result.reprint_required).toBe(false);
+    expect(audit.record).not.toHaveBeenCalledWith(
+      expect.objectContaining({ action: 'QR_REPRINT_REQUIRED' }),
+    );
+  });
+
+  it('reuses the existing static QR when the same fixed amount is requested again', async () => {
+    const existing = {
+      id: 'qr-existing',
+      merchantId: 'merchant-1',
+      status: 'ACTIVE',
+      currentVersion: 1,
+      reprintRequired: false,
+      payloadVersions: [
+        {
+          version: 1,
+          tlvPayload: 'payload',
+          crcValue: '35EA',
+          // Simulates a Postgres NUMERIC(18,2) round-trip: '150000' stored,
+          // '150000.00' read back — must still compare equal to a fresh
+          // request for '150000'.
+          amount: '150000.00',
+        },
+      ],
+    };
+    const { service, repository } = buildService({
+      findActiveStaticQr: jest.fn().mockResolvedValue(existing),
+      getAssetUrls: jest.fn().mockResolvedValue({ png: '/storage/x.png' }),
+    });
+
+    const result = await service.generateStatic('merchant-1', actor, {
+      amount: '150000',
+    });
+
+    expect(repository.persistQrGeneration).not.toHaveBeenCalled();
+    expect(result.qr_id).toBe('qr-existing');
+    expect(result.amount).toBe('150000.00');
   });
 
   it('generates dynamic invoice QR with amount and bill number', async () => {
@@ -166,6 +414,11 @@ describe('QrService', () => {
         tag62StoreLabel: merchantCtx.alias,
       }),
     );
+    // Dynamic QRs still always get an expiry — unaffected by static QRs now
+    // being able to carry an amount without one.
+    expect(result.expires_at).toBeTruthy();
+    const persistedArgs = repository.persistQrGeneration.mock.calls[0][0];
+    expect(persistedArgs.expiresAt).toBeInstanceOf(Date);
     expect(audit.record).toHaveBeenCalledWith(
       expect.objectContaining({ action: 'QR_DYNAMIC_CREATED' }),
     );

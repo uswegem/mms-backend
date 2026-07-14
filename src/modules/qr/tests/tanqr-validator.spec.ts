@@ -43,6 +43,50 @@ describe('validateTanqrFieldInput', () => {
       }),
     ).toThrow('Dynamic QR requires transaction amount');
   });
+
+  it('does not require an amount for static QR', () => {
+    expect(() =>
+      validateTanqrFieldInput({
+        poiMethod: '11',
+        acquirerId5: '01001',
+        merchantId: '12345678',
+        mcc: '5814',
+        merchantName: 'YN RESTAURANTS',
+        city: 'DODOMA',
+        postalCode: '41000',
+      }),
+    ).not.toThrow();
+  });
+
+  it('validates amount format for a static QR when one is supplied — e.g. a fixed school fee', () => {
+    expect(() =>
+      validateTanqrFieldInput({
+        poiMethod: '11',
+        acquirerId5: '01001',
+        merchantId: '12345678',
+        mcc: '5814',
+        merchantName: 'YN RESTAURANTS',
+        city: 'DODOMA',
+        postalCode: '41000',
+        amount: 'not-a-number',
+      }),
+    ).toThrow('Amount must be numeric');
+  });
+
+  it('accepts a well-formed fixed amount on a static QR', () => {
+    expect(() =>
+      validateTanqrFieldInput({
+        poiMethod: '11',
+        acquirerId5: '01001',
+        merchantId: '12345678',
+        mcc: '5814',
+        merchantName: 'YN RESTAURANTS',
+        city: 'DODOMA',
+        postalCode: '41000',
+        amount: '150000',
+      }),
+    ).not.toThrow();
+  });
 });
 
 describe('verifyTanqrPayload', () => {
@@ -70,6 +114,26 @@ describe('extractTag62SubTag', () => {
       '00020101021126390014tz.go.bot.tips0105010010208123456785204581453038345802TZ5914YN RESTAURANTS6006DODOMA610541000622103080011234907051100263047D47';
     expect(extractTag62SubTag(payload, '03')).toBe('00112349');
     expect(extractTag62SubTag(payload, '07')).toBe('11002');
+  });
+
+  it('extracts a non-numeric terminal label (previously broken by a digit-only content regex)', () => {
+    const { tlvPayload } = buildTanqrPayload({
+      poiMethod: '11',
+      acquirerId5: '01044',
+      merchantId: '78000028',
+      mcc: '8211',
+      merchantName: 'MAPAMBANO SECONDARY',
+      city: 'DAR ES SALAAM',
+      postalCode: '11000',
+      additionalData: {
+        storeLabel: '78000028',
+        terminalLabel: 'POS-07',
+        referenceLabel: '00100014',
+      },
+    });
+    expect(extractTag62SubTag(tlvPayload, '07')).toBe('POS-07');
+    expect(extractTag62SubTag(tlvPayload, '03')).toBe('78000028');
+    expect(extractTag62SubTag(tlvPayload, '05')).toBe('00100014');
   });
 });
 
