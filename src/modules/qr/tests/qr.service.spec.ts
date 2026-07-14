@@ -1,6 +1,7 @@
 import { QrType } from '@prisma/client';
 import { Permission } from '@infrastructure/auth/rbac/enums/permission.enum';
 import { QrService } from '../application/services/qr.service';
+import { QrPayloadValidatorService } from '../application/services/qr-payload-validator.service';
 import { buildTLV } from '../domain/tlv.builder';
 import { buildTanqrPayload, verifyTanqrCrc } from '../domain/tanqr-payload.builder';
 
@@ -45,6 +46,9 @@ describe('QrService', () => {
       saveRenderAssets: jest.fn(),
       getAssetUrls: jest.fn(),
       clearReprintFlag: jest.fn(),
+      allocateDynamicBillNumber: jest.fn().mockResolvedValue('DYN000001'),
+      supersedeActiveDynamicQrs: jest.fn(),
+      findDynamicQrVersionByBillNumber: jest.fn().mockResolvedValue(null),
       ...overrides,
     };
     const validators = {
@@ -70,7 +74,10 @@ describe('QrService', () => {
     };
     const audit = { record: jest.fn() };
     const annex2 = { renderPdf: jest.fn(), renderSvg: jest.fn() };
-    const payloadValidator = { validateRequest: jest.fn() };
+    // Real instance — QrPayloadValidatorService has no DB dependencies, and
+    // validatePayload's own logic depends on its actual self-check output
+    // (mode/valid/poiMethod), not just that some function was called.
+    const payloadValidator = new QrPayloadValidatorService();
     const scope = {
       requirePermission: jest.fn(),
       assertCanAccessMerchant: jest.fn(),
@@ -422,5 +429,110 @@ describe('QrService', () => {
     expect(audit.record).toHaveBeenCalledWith(
       expect.objectContaining({ action: 'QR_DYNAMIC_CREATED' }),
     );
+  });
+
+  describe('validatePayload — dynamic QR replay guard', () => {
+    const stalePayload = buildTanqrPayload({
+      poiMethod: '12',
+      acquirerId5: merchantCtx.acquirerId5,
+      merchantId: merchantCtx.merchantId15,
+      mcc: '8211',
+      merchantName: 'MAPAMBANO SECONDARY',
+      city: 'DAR ES SALAAM',
+      postalCode: '11000',
+      amount: '50000',
+      additionalData: { storeLabel: merchantCtx.alias, billNumber: 'DYN000001' },
+    });
+
+    it('rejects a scan of an expired-but-structurally-valid dynamic QR whose merchant has since generated a newer active version', async () => {
+      // The stale QR's own CRC/format are still perfectly valid — this is
+      // exactly the "screenshot from an earlier session" replay scenario.
+      const { service, repository } = buildService({
+        findDynamicQrVersionByBillNumber: jest.fn().mockResolvedValue({
+          tlvPayload: stalePayload.tlvPayload,
+          qrCode: {
+            // Superseded when the merchant generated a newer dynamic QR,
+            // and its own validity window has also since passed.
+            status: 'REVOKED',
+            expiresAt: new Date(Date.now() - 60_000),
+          },
+        }),
+      });
+
+      const outcome = await service.validatePayload({ tlv_payload: stalePayload.tlvPayload });
+
+      expect(outcome.mode).toBe('verify');
+      if (outcome.mode !== 'verify') throw new Error('unreachable');
+      expect(outcome.result.valid).toBe(false);
+      expect(outcome.result.errors.join(' ')).toMatch(/superseded|disabled/);
+      expect(repository.findDynamicQrVersionByBillNumber).toHaveBeenCalledWith(
+        merchantCtx.merchantId15,
+        'DYN000001',
+      );
+    });
+
+    it('rejects a scan of an expired dynamic QR even when it was never superseded', async () => {
+      const { service } = buildService({
+        findDynamicQrVersionByBillNumber: jest.fn().mockResolvedValue({
+          tlvPayload: stalePayload.tlvPayload,
+          qrCode: { status: 'ACTIVE', expiresAt: new Date(Date.now() - 60_000) },
+        }),
+      });
+
+      const outcome = await service.validatePayload({ tlv_payload: stalePayload.tlvPayload });
+
+      if (outcome.mode !== 'verify') throw new Error('unreachable');
+      expect(outcome.result.valid).toBe(false);
+      expect(outcome.result.errors.join(' ')).toMatch(/expired/i);
+    });
+
+    it('rejects a scan whose payload does not match the recorded version for that Bill Number', async () => {
+      const { service } = buildService({
+        findDynamicQrVersionByBillNumber: jest.fn().mockResolvedValue({
+          tlvPayload: 'a-different-recorded-payload',
+          qrCode: { status: 'ACTIVE', expiresAt: new Date(Date.now() + 60_000) },
+        }),
+      });
+
+      const outcome = await service.validatePayload({ tlv_payload: stalePayload.tlvPayload });
+
+      if (outcome.mode !== 'verify') throw new Error('unreachable');
+      expect(outcome.result.valid).toBe(false);
+      expect(outcome.result.errors.join(' ')).toMatch(/does not match/i);
+    });
+
+    it('accepts a scan of the current, active, unexpired dynamic QR', async () => {
+      const { service } = buildService({
+        findDynamicQrVersionByBillNumber: jest.fn().mockResolvedValue({
+          tlvPayload: stalePayload.tlvPayload,
+          qrCode: { status: 'ACTIVE', expiresAt: new Date(Date.now() + 60_000) },
+        }),
+      });
+
+      const outcome = await service.validatePayload({ tlv_payload: stalePayload.tlvPayload });
+
+      if (outcome.mode !== 'verify') throw new Error('unreachable');
+      expect(outcome.result.valid).toBe(true);
+    });
+
+    it('does not run the replay check for a static QR — static QRs are meant to be reused indefinitely', async () => {
+      const staticPayload = buildTanqrPayload({
+        poiMethod: '11',
+        acquirerId5: merchantCtx.acquirerId5,
+        merchantId: merchantCtx.merchantId15,
+        mcc: '8211',
+        merchantName: 'MAPAMBANO SECONDARY',
+        city: 'DAR ES SALAAM',
+        postalCode: '11000',
+        additionalData: { storeLabel: merchantCtx.alias },
+      });
+      const { service, repository } = buildService();
+
+      const outcome = await service.validatePayload({ tlv_payload: staticPayload.tlvPayload });
+
+      if (outcome.mode !== 'verify') throw new Error('unreachable');
+      expect(outcome.result.valid).toBe(true);
+      expect(repository.findDynamicQrVersionByBillNumber).not.toHaveBeenCalled();
+    });
   });
 });

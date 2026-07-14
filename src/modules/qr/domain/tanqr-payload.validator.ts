@@ -166,7 +166,11 @@ export function verifyTanqrPayload(tlvPayload: string): TanqrPayloadVerification
   if (!poiMethod) {
     errors.push('Point of initiation method (tag 01) must be 11 or 12');
   }
-  if (!body.includes('26390014tz.go.bot.tips')) {
+  // Tag 26's own length prefix varies with the Merchant ID length (up to 15
+  // digits, not the fixed 8-digit alias) — only the inner domain marker
+  // ("0014" + the 14-char domain string) is invariant, so match on that
+  // rather than a specific outer tag26 length like "2639".
+  if (!/26\d{2}0014tz\.go\.bot\.tips/.test(body)) {
     errors.push('TIPS merchant account template (tag 26) is missing or invalid');
   }
 

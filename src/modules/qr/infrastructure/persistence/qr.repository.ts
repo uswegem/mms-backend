@@ -306,4 +306,56 @@ export class QrRepository {
       include: { payloadVersions: { orderBy: { version: 'desc' }, take: 1 } },
     });
   }
+
+  /**
+   * Atomically claims the next Bill Number (tag 62/01) in a per-merchant
+   * sequence, used when a dynamic QR caller doesn't supply their own — every
+   * dynamic QR must carry a value here so a scan can be matched back to the
+   * exact version it came from, not just "the latest QR for this merchant".
+   */
+  async allocateDynamicBillNumber(merchantId: string, tx?: Tx): Promise<string> {
+    const client = tx ?? this.prisma;
+    const row = await client.dynamicQrSequence.upsert({
+      where: { merchantId },
+      update: { lastSeq: { increment: 1 } },
+      create: { merchantId, lastSeq: 1 },
+    });
+    return `DYN${row.lastSeq.toString().padStart(6, '0')}`;
+  }
+
+  /**
+   * Looks up the exact QrPayloadVersion a scanned dynamic QR came from, keyed
+   * on the (Merchant ID, Bill Number) pair embedded in the payload — not
+   * merely "the current active dynamic QR for this merchant".
+   */
+  async findDynamicQrVersionByBillNumber(tag26MerchantId: string, billNumber: string) {
+    return this.prisma.qrPayloadVersion.findFirst({
+      where: { tag26MerchantId, billNumber },
+      include: { qrCode: true },
+    });
+  }
+
+  /**
+   * Revokes any dynamic QR still ACTIVE for this merchant/store/terminal
+   * scope before a new one is issued, so at most one dynamic QR is ever
+   * live at a time and old ones can't be replayed as if still current.
+   */
+  async supersedeActiveDynamicQrs(
+    merchantId: string,
+    storeId?: string,
+    terminalId?: string,
+    tx?: Tx,
+  ): Promise<void> {
+    const client = tx ?? this.prisma;
+    await client.qrCode.updateMany({
+      where: {
+        merchantId,
+        qrType: QrType.DYNAMIC,
+        status: QrStatus.ACTIVE,
+        storeId: storeId ?? null,
+        terminalId: terminalId ?? null,
+      },
+      data: { status: QrStatus.REVOKED, revokedAt: new Date() },
+    });
+  }
 }

@@ -1137,7 +1137,22 @@ model QrPayloadVersion {
   renderAssets  QrRenderAsset[]
 
   @@unique([qrId, version])
+  // Ties a dynamic QR payload to a stable, per-merchant-unique identifier
+  // (tag 62/01) so a scan can be matched back to the exact version it came
+  // from, instead of only "the latest active QR for this merchant" — a
+  // stale/replayed dynamic QR image must not resolve to a newer version.
+  // NULLs (static QRs, which don't carry a bill number) are unconstrained.
+  @@unique([tag26MerchantId, billNumber], map: "qr_payload_versions_merchant_billnumber_key")
   @@map("qr_payload_versions")
+}
+
+/// Per-merchant atomic counter used to auto-generate a guaranteed-unique
+/// Bill Number (tag 62/01) for dynamic QRs that don't specify their own.
+model DynamicQrSequence {
+  merchantId String @id @map("merchant_id") @db.Uuid
+  lastSeq    Int    @default(0) @map("last_seq")
+
+  @@map("dynamic_qr_sequences")
 }
 
 model QrRenderAsset {

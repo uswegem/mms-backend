@@ -1,5 +1,5 @@
 import { buildAliasMerchantId, validateAliasMerchantId } from '../domain/alias-merchant-id';
-import { extractTag62SubTag } from '../domain/tlv.parser';
+import { extractTag26SubTag, extractTag62SubTag } from '../domain/tlv.parser';
 import {
   validateAcquirerId5,
   validateMerchantId,
@@ -106,6 +106,28 @@ describe('verifyTanqrPayload', () => {
     expect(result.valid).toBe(false);
     expect(result.errors[0]).toContain('CRC mismatch');
   });
+
+  it('verifies a payload built with a full 15-digit bank Merchant ID, not just the 8-digit alias length', () => {
+    // Tag 26's own length prefix depends on the Merchant ID length — this
+    // previously assumed a fixed 8-digit ID (hardcoded "2639...") and
+    // rejected every real payload this system issues, which uses up to a
+    // 15-digit bank-assigned Merchant ID (tag 26/02), distinct from the
+    // 8-digit Lipa Namba alias.
+    const { tlvPayload } = buildTanqrPayload({
+      poiMethod: '11',
+      acquirerId5: '01044',
+      merchantId: '044000000012345',
+      mcc: '5814',
+      merchantName: 'TEST MERCHANT',
+      city: 'DODOMA',
+      postalCode: '41000',
+      additionalData: { storeLabel: '78012349' },
+    });
+
+    const result = verifyTanqrPayload(tlvPayload);
+    expect(result.valid).toBe(true);
+    expect(result.errors).toEqual([]);
+  });
 });
 
 describe('extractTag62SubTag', () => {
@@ -134,6 +156,25 @@ describe('extractTag62SubTag', () => {
     expect(extractTag62SubTag(tlvPayload, '07')).toBe('POS-07');
     expect(extractTag62SubTag(tlvPayload, '03')).toBe('78000028');
     expect(extractTag62SubTag(tlvPayload, '05')).toBe('00100014');
+  });
+});
+
+describe('extractTag26SubTag', () => {
+  it('extracts the bank Merchant ID (tag 26/02), distinct from the 8-digit alias', () => {
+    const merchantId15 = '044000000012345';
+    const { tlvPayload } = buildTanqrPayload({
+      poiMethod: '11',
+      acquirerId5: '01044',
+      merchantId: merchantId15,
+      mcc: '5814',
+      merchantName: 'TEST MERCHANT',
+      city: 'DODOMA',
+      postalCode: '41000',
+      additionalData: { storeLabel: '78012349' },
+    });
+
+    expect(extractTag26SubTag(tlvPayload, '02')).toBe(merchantId15);
+    expect(extractTag26SubTag(tlvPayload, '01')).toBe('01044');
   });
 });
 

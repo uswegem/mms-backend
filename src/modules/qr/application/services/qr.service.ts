@@ -3,7 +3,7 @@ import {
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
-import { QrStatus, QrType } from '@prisma/client';
+import { Prisma, QrStatus, QrType } from '@prisma/client';
 import { AuditLogService } from '@infrastructure/audit/services/audit-log.service';
 import { Permission } from '@infrastructure/auth/rbac/enums/permission.enum';
 import { PrismaService } from '@infrastructure/database/prisma/prisma.service';
@@ -16,7 +16,7 @@ import { QrRendererService } from './qr-renderer.service';
 import { QrStorageService } from './qr-storage.service';
 import { QrAnnex2DisplayService } from './qr-annex2-display.service';
 import { QrPayloadValidatorService } from './qr-payload-validator.service';
-import { extractTag62SubTag } from '../../domain/tlv.parser';
+import { extractTag26SubTag, extractTag62SubTag } from '../../domain/tlv.parser';
 
 export interface QrAssetMap {
   png?: string;
@@ -280,6 +280,15 @@ export class QrService {
     const referenceLabel =
       options.referenceLabel ?? options.internalRoutingId ?? undefined;
 
+    // Every dynamic QR must carry a Bill Number (tag 62/01) that's unique
+    // per merchant, so a scan can be tied back to the exact version it came
+    // from rather than "whatever's currently active for this merchant" — a
+    // stale/replayed image must be distinguishable from a newer one. Callers
+    // may supply their own (e.g. a school's invoice number); uniqueness is
+    // enforced by a DB constraint either way.
+    const billNumber =
+      options.billNumber ?? (await this.repository.allocateDynamicBillNumber(merchantId));
+
     const { tlvPayload, crcValue } = buildTanqrPayload({
       poiMethod: '12',
       acquirerId5: ctx.acquirerId5,
@@ -290,7 +299,7 @@ export class QrService {
       postalCode,
       amount,
       additionalData: {
-        billNumber: options.billNumber,
+        billNumber,
         storeLabel: ctx.alias,
         terminalLabel: options.terminalLabel,
         referenceLabel,
@@ -303,25 +312,44 @@ export class QrService {
     }
     const expiresAt = new Date(Date.now() + expiresIn * 60_000);
 
-    const qrRecord = await this.repository.persistQrGeneration({
+    // Retire any dynamic QR still active for this merchant/store/terminal
+    // scope before issuing the new one, so at most one is ever live — an
+    // old image can't be scanned as if it were still the current version.
+    await this.repository.supersedeActiveDynamicQrs(
       merchantId,
-      storeId: options.storeId,
-      terminalId: options.terminalId,
-      qrType: QrType.DYNAMIC,
-      poiMethod: '12',
-      createdBy: actor.sub,
-      version: 1,
-      tlvPayload,
-      crcValue,
-      tag26MerchantId: ctx.merchantId15,
-      tag62StoreLabel: ctx.alias,
-      tag62InternalId: referenceLabel,
-      tag62TerminalLabel: options.terminalLabel,
-      amount,
-      billNumber: options.billNumber,
-      referenceLabel,
-      expiresAt,
-    });
+      options.storeId,
+      options.terminalId,
+    );
+
+    let qrRecord: Awaited<ReturnType<QrRepository['persistQrGeneration']>>;
+    try {
+      qrRecord = await this.repository.persistQrGeneration({
+        merchantId,
+        storeId: options.storeId,
+        terminalId: options.terminalId,
+        qrType: QrType.DYNAMIC,
+        poiMethod: '12',
+        createdBy: actor.sub,
+        version: 1,
+        tlvPayload,
+        crcValue,
+        tag26MerchantId: ctx.merchantId15,
+        tag62StoreLabel: ctx.alias,
+        tag62InternalId: referenceLabel,
+        tag62TerminalLabel: options.terminalLabel,
+        amount,
+        billNumber,
+        referenceLabel,
+        expiresAt,
+      });
+    } catch (err) {
+      if (err instanceof Prisma.PrismaClientKnownRequestError && err.code === 'P2002') {
+        throw new BadRequestException(
+          `Bill number "${billNumber}" has already been used for a dynamic QR issued to this merchant`,
+        );
+      }
+      throw err;
+    }
 
     const assets = await this.renderAndStore(
       tlvPayload,
@@ -339,7 +367,7 @@ export class QrService {
       metadata: {
         merchantId,
         amount,
-        billNumber: options.billNumber ?? null,
+        billNumber,
         expiresAt: expiresAt.toISOString(),
       },
     });
@@ -354,7 +382,7 @@ export class QrService {
       merchant_id: merchantId,
       alias: ctx.alias,
       amount,
-      bill_number: options.billNumber,
+      bill_number: billNumber,
       reference_label: referenceLabel,
       expires_at: expiresAt.toISOString(),
       tlv_payload: tlvPayload,
@@ -521,8 +549,69 @@ export class QrService {
     };
   }
 
+  /**
+   * Self-check (CRC/format) plus, for a dynamic QR being verified from its
+   * raw payload, an exact-match lookup against the issued record — a
+   * structurally valid but stale/superseded/expired dynamic QR must fail
+   * even though its own CRC still checks out. Static QRs are meant to be
+   * reused indefinitely and skip this check.
+   */
   async validatePayload(dto: Parameters<QrPayloadValidatorService['validateRequest']>[0]) {
-    return this.payloadValidator.validateRequest(dto);
+    const outcome = await this.payloadValidator.validateRequest(dto);
+    if (
+      outcome.mode === 'verify' &&
+      outcome.result.valid &&
+      outcome.result.poiMethod === '12' &&
+      dto.tlv_payload
+    ) {
+      const replay = await this.verifyDynamicQrRecord(dto.tlv_payload);
+      if (!replay.valid) {
+        outcome.result.valid = false;
+        outcome.result.errors = [...outcome.result.errors, replay.reason!];
+      }
+    }
+    return outcome;
+  }
+
+  private async verifyDynamicQrRecord(
+    tlvPayload: string,
+  ): Promise<{ valid: boolean; reason?: string }> {
+    const tag26MerchantId = extractTag26SubTag(tlvPayload, '02');
+    const billNumber = extractTag62SubTag(tlvPayload, '01');
+    if (!tag26MerchantId || !billNumber) {
+      return {
+        valid: false,
+        reason:
+          'Dynamic QR is missing a Merchant ID or Bill Number needed to verify it against issued records',
+      };
+    }
+
+    const record = await this.repository.findDynamicQrVersionByBillNumber(
+      tag26MerchantId,
+      billNumber,
+    );
+    if (!record) {
+      return {
+        valid: false,
+        reason: 'No issued dynamic QR record matches this Merchant ID and Bill Number',
+      };
+    }
+    if (record.tlvPayload !== tlvPayload) {
+      return {
+        valid: false,
+        reason: 'Scanned payload does not match the recorded QR version for this Bill Number',
+      };
+    }
+    if (record.qrCode.status !== QrStatus.ACTIVE) {
+      return {
+        valid: false,
+        reason: 'QR has been superseded or disabled and is no longer valid',
+      };
+    }
+    if (record.qrCode.expiresAt && record.qrCode.expiresAt.getTime() < Date.now()) {
+      return { valid: false, reason: 'QR has expired' };
+    }
+    return { valid: true };
   }
 
   async getQrImageBuffer(

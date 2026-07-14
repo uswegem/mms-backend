@@ -1,17 +1,17 @@
-/** Parse sub-tags inside EMVCo template tag 62 content. */
-export function extractTag62SubTag(
+function extractNestedSubTag(
   tlvPayload: string,
+  parentTag: string,
   subTag: string,
 ): string | null {
   // Capture only the 2-digit length here — the content itself is sliced by
   // that declared length below, not matched via a digit-only regex, since
-  // tag 62 sub-fields (e.g. an alphanumeric terminal label) aren't
-  // guaranteed to be numeric.
-  const tag62Match = tlvPayload.match(/62(\d{2})/);
-  if (!tag62Match || tag62Match.index === undefined) return null;
+  // sub-fields (e.g. an alphanumeric terminal label) aren't guaranteed to
+  // be numeric.
+  const parentMatch = tlvPayload.match(new RegExp(`${parentTag}(\\d{2})`));
+  if (!parentMatch || parentMatch.index === undefined) return null;
 
-  const length = Number(tag62Match[1]);
-  const contentStart = tag62Match.index + tag62Match[0].length;
+  const length = Number(parentMatch[1]);
+  const contentStart = parentMatch.index + parentMatch[0].length;
   const content = tlvPayload.slice(contentStart, contentStart + length);
   if (content.length < length) return null;
   let index = 0;
@@ -26,4 +26,21 @@ export function extractTag62SubTag(
   }
 
   return null;
+}
+
+/** Parse sub-tags inside EMVCo template tag 62 (Additional Data) content. */
+export function extractTag62SubTag(
+  tlvPayload: string,
+  subTag: string,
+): string | null {
+  return extractNestedSubTag(tlvPayload, '62', subTag);
+}
+
+/** Parse sub-tags inside TIPS Merchant Account template tag 26 content —
+ * e.g. subTag '02' for the 15-digit bank Merchant ID. */
+export function extractTag26SubTag(
+  tlvPayload: string,
+  subTag: string,
+): string | null {
+  return extractNestedSubTag(tlvPayload, '26', subTag);
 }
