@@ -1,6 +1,11 @@
 import { QrAnnex2DisplayService } from '../application/services/qr-annex2-display.service';
 import { QrRendererService } from '../application/services/qr-renderer.service';
 
+// Actual QR/PDF rendering work, not mocked — cold JIT warm-up under parallel
+// test workers can exceed Jest's 5s default (same class of flake fixed in
+// qr-renderer.spec.ts).
+jest.setTimeout(15000);
+
 describe('QrAnnex2DisplayService', () => {
   const annex2 = new QrAnnex2DisplayService();
   const renderer = new QrRendererService();
