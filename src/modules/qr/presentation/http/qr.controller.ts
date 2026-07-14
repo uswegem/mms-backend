@@ -2,6 +2,7 @@ import {
   Body,
   Controller,
   Get,
+  Headers,
   Param,
   ParseUUIDPipe,
   Patch,
@@ -59,12 +60,14 @@ export class QrController {
   createStaticLegacy(
     @CurrentUser() user: JwtPayload,
     @Body() dto: LegacyCreateStaticQrDto,
+    @Headers('idempotency-key') idempotencyKeyHeader?: string,
   ) {
     return this.qrService.generateStatic(dto.merchantId, toActor(user), {
       forceRegenerate: dto.force_regenerate,
       internalRoutingId: dto.internalRoutingId,
       studentId: dto.studentId,
       amount: dto.amount,
+      idempotencyKey: idempotencyKeyHeader ?? dto.idempotency_key,
     });
   }
 
@@ -74,6 +77,7 @@ export class QrController {
   createDynamicLegacy(
     @CurrentUser() user: JwtPayload,
     @Body() dto: LegacyCreateDynamicQrDto,
+    @Headers('idempotency-key') idempotencyKeyHeader?: string,
   ) {
     return this.qrService.generateDynamic(dto.merchantId, toActor(user), {
       amount: dto.amount,
@@ -82,6 +86,7 @@ export class QrController {
       storeId: dto.store_id,
       terminalId: dto.terminal_id,
       expiresInMinutes: dto.expires_in_minutes,
+      idempotencyKey: idempotencyKeyHeader ?? dto.idempotency_key,
     });
   }
 

@@ -30,4 +30,12 @@ export class CreateStaticQrDto {
   @IsOptional()
   @IsString()
   amount?: string;
+
+  @ApiPropertyOptional({
+    description:
+      'Client-generated key to safely retry this request without generating a duplicate QR — prefer the Idempotency-Key header instead.',
+  })
+  @IsOptional()
+  @IsString()
+  idempotency_key?: string;
 }

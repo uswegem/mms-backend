@@ -2,6 +2,7 @@ import {
   Body,
   Controller,
   Get,
+  Headers,
   Param,
   ParseUUIDPipe,
   Post,
@@ -44,6 +45,7 @@ export class MerchantQrController {
     @Param('merchantId', ParseUUIDPipe) merchantId: string,
     @CurrentUser() user: JwtPayload,
     @Body() dto: CreateStaticQrDto,
+    @Headers('idempotency-key') idempotencyKeyHeader?: string,
   ) {
     return this.qrService.generateStatic(merchantId, toActor(user), {
       storeId: dto.store_id,
@@ -51,6 +53,7 @@ export class MerchantQrController {
       purpose: dto.purpose,
       forceRegenerate: dto.force_regenerate ?? false,
       amount: dto.amount,
+      idempotencyKey: idempotencyKeyHeader ?? dto.idempotency_key,
     });
   }
 
@@ -61,6 +64,7 @@ export class MerchantQrController {
     @Param('merchantId', ParseUUIDPipe) merchantId: string,
     @CurrentUser() user: JwtPayload,
     @Body() dto: CreateDynamicQrDto,
+    @Headers('idempotency-key') idempotencyKeyHeader?: string,
   ) {
     return this.qrService.generateDynamic(merchantId, toActor(user), {
       amount: dto.amount,
@@ -69,6 +73,7 @@ export class MerchantQrController {
       storeId: dto.store_id,
       terminalId: dto.terminal_id,
       expiresInMinutes: dto.expires_in_minutes,
+      idempotencyKey: idempotencyKeyHeader ?? dto.idempotency_key,
     });
   }
 

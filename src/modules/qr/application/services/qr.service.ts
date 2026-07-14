@@ -1,9 +1,14 @@
 import {
   BadRequestException,
+  ConflictException,
+  Inject,
   Injectable,
   NotFoundException,
+  Optional,
 } from '@nestjs/common';
 import { Prisma, QrStatus, QrType } from '@prisma/client';
+import type Redis from 'ioredis';
+import { REDIS_CLIENT } from '@infrastructure/cache/redis.constants';
 import { AuditLogService } from '@infrastructure/audit/services/audit-log.service';
 import { Permission } from '@infrastructure/auth/rbac/enums/permission.enum';
 import { PrismaService } from '@infrastructure/database/prisma/prisma.service';
@@ -18,9 +23,54 @@ import { QrAnnex2DisplayService } from './qr-annex2-display.service';
 import { QrPayloadValidatorService } from './qr-payload-validator.service';
 import { extractTag26SubTag, extractTag62SubTag } from '../../domain/tlv.parser';
 
+// A client on a flaky branch/mobile connection may time out and blindly
+// retry a QR generation POST. Without an idempotency key, generateDynamic
+// in particular would mint a brand-new QrPayloadVersion (and briefly leave
+// two dynamic QRs simultaneously ACTIVE, given supersedeActiveDynamicQrs
+// isn't in the same transaction as the create) on every retry. When a
+// caller supplies one, IDEMPOTENCY_PROCESSING_MARKER atomically claims the
+// key via SET NX so a concurrent retry gets rejected rather than racing,
+// and the real result is cached for IDEMPOTENCY_RESULT_TTL_SECONDS so a
+// sequential retry replays the original response instead of generating again.
+const IDEMPOTENCY_PROCESSING_MARKER = '__PROCESSING__';
+const IDEMPOTENCY_LOCK_TTL_SECONDS = 30;
+const IDEMPOTENCY_RESULT_TTL_SECONDS = 24 * 60 * 60;
+
 export interface QrAssetMap {
   png?: string;
   svg?: string;
+}
+
+export interface GenerateStaticOptions {
+  storeId?: string;
+  terminalId?: string;
+  purpose?: string;
+  forceRegenerate?: boolean;
+  terminalLabel?: string;
+  referenceLabel?: string;
+  internalRoutingId?: string;
+  studentId?: string;
+  /** Fixed amount (tag 54) baked into the static payload, e.g. a school's
+   * termly fee. The QR stays static/non-expiring — this is distinct from
+   * a dynamic QR's amount, which always comes with an expiry. */
+  amount?: string | number;
+  /** Client-supplied key (e.g. Idempotency-Key header) to de-duplicate a
+   * retried POST — see QrService.withIdempotency. */
+  idempotencyKey?: string;
+}
+
+export interface GenerateDynamicOptions {
+  amount: string | number;
+  billNumber?: string;
+  referenceLabel?: string;
+  storeId?: string;
+  terminalId?: string;
+  expiresInMinutes?: number;
+  terminalLabel?: string;
+  internalRoutingId?: string;
+  /** Client-supplied key (e.g. Idempotency-Key header) to de-duplicate a
+   * retried POST — see QrService.withIdempotency. */
+  idempotencyKey?: string;
 }
 
 export interface StaticQrResult {
@@ -74,25 +124,71 @@ export class QrService {
     private readonly payloadValidator: QrPayloadValidatorService,
     private readonly audit: AuditLogService,
     private readonly scope: MerchantScopeService,
+    @Optional() @Inject(REDIS_CLIENT) private readonly redis: Redis | null,
   ) {}
+
+  /**
+   * Best-effort request de-duplication for client-retried POSTs. No-ops
+   * (always calls fn) when no key is supplied or Redis is unavailable —
+   * this is a safety net against duplicate generation on retry, not a
+   * hard dependency the endpoint requires to function.
+   */
+  private async withIdempotency<T>(
+    scopeKey: string,
+    idempotencyKey: string | undefined,
+    fn: () => Promise<T>,
+  ): Promise<T> {
+    if (!idempotencyKey || !this.redis) {
+      return fn();
+    }
+    const key = `qr:idem:${scopeKey}:${idempotencyKey}`;
+    const claimed = await this.redis.set(
+      key,
+      IDEMPOTENCY_PROCESSING_MARKER,
+      'EX',
+      IDEMPOTENCY_LOCK_TTL_SECONDS,
+      'NX',
+    );
+    if (claimed !== 'OK') {
+      const existing = await this.redis.get(key);
+      if (existing && existing !== IDEMPOTENCY_PROCESSING_MARKER) {
+        return JSON.parse(existing) as T;
+      }
+      throw new ConflictException(
+        'A request with this Idempotency-Key is already being processed',
+      );
+    }
+    try {
+      const result = await fn();
+      await this.redis.set(
+        key,
+        JSON.stringify(result),
+        'EX',
+        IDEMPOTENCY_RESULT_TTL_SECONDS,
+      );
+      return result;
+    } catch (err) {
+      await this.redis.del(key);
+      throw err;
+    }
+  }
 
   async generateStatic(
     merchantId: string,
     actor: ActorContext,
-    options: {
-      storeId?: string;
-      terminalId?: string;
-      purpose?: string;
-      forceRegenerate?: boolean;
-      terminalLabel?: string;
-      referenceLabel?: string;
-      internalRoutingId?: string;
-      studentId?: string;
-      /** Fixed amount (tag 54) baked into the static payload, e.g. a school's
-       * termly fee. The QR stays static/non-expiring — this is distinct from
-       * a dynamic QR's amount, which always comes with an expiry. */
-      amount?: string | number;
-    } = {},
+    options: GenerateStaticOptions = {},
+  ): Promise<StaticQrResult> {
+    return this.withIdempotency(
+      `${merchantId}:static`,
+      options.idempotencyKey,
+      () => this.doGenerateStatic(merchantId, actor, options),
+    );
+  }
+
+  private async doGenerateStatic(
+    merchantId: string,
+    actor: ActorContext,
+    options: GenerateStaticOptions,
   ): Promise<StaticQrResult> {
     this.scope.requirePermission(actor, Permission.QR_GENERATE);
     const ctx = await this.validators.validateMerchantForQr(merchantId);
@@ -251,16 +347,19 @@ export class QrService {
   async generateDynamic(
     merchantId: string,
     actor: ActorContext,
-    options: {
-      amount: string | number;
-      billNumber?: string;
-      referenceLabel?: string;
-      storeId?: string;
-      terminalId?: string;
-      expiresInMinutes?: number;
-      terminalLabel?: string;
-      internalRoutingId?: string;
-    },
+    options: GenerateDynamicOptions,
+  ): Promise<DynamicQrResult> {
+    return this.withIdempotency(
+      `${merchantId}:dynamic`,
+      options.idempotencyKey,
+      () => this.doGenerateDynamic(merchantId, actor, options),
+    );
+  }
+
+  private async doGenerateDynamic(
+    merchantId: string,
+    actor: ActorContext,
+    options: GenerateDynamicOptions,
   ): Promise<DynamicQrResult> {
     this.scope.requirePermission(actor, Permission.QR_GENERATE);
     const ctx = await this.validators.validateMerchantForQr(merchantId);

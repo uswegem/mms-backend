@@ -35,6 +35,7 @@ describe('QrService', () => {
   function buildService(
     overrides: Partial<Record<string, unknown>> = {},
     prismaOverrides: Partial<Record<string, unknown>> = {},
+    redis: unknown = null,
   ) {
     const repository = {
       findActiveStaticQr: jest.fn().mockResolvedValue(null),
@@ -97,6 +98,7 @@ describe('QrService', () => {
       payloadValidator as never,
       audit as never,
       scope as never,
+      redis as never,
     );
 
     return { service, repository, validators, audit, scope, storage, renderer, prisma };
@@ -533,6 +535,102 @@ describe('QrService', () => {
       if (outcome.mode !== 'verify') throw new Error('unreachable');
       expect(outcome.result.valid).toBe(true);
       expect(repository.findDynamicQrVersionByBillNumber).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('Idempotency-Key de-duplication', () => {
+    function createMockRedis() {
+      const store = new Map<string, string>();
+      return {
+        store,
+        set: jest.fn(async (key: string, value: string, ...args: unknown[]) => {
+          if (args.includes('NX') && store.has(key)) return null;
+          store.set(key, value);
+          return 'OK';
+        }),
+        get: jest.fn(async (key: string) => store.get(key) ?? null),
+        del: jest.fn(async (key: string) => {
+          store.delete(key);
+          return 1;
+        }),
+      };
+    }
+
+    it('replays the cached result for a retried static QR request with the same key, without generating again', async () => {
+      const redis = createMockRedis();
+      const { service, repository } = buildService({}, {}, redis);
+
+      const first = await service.generateStatic('merchant-1', actor, {
+        idempotencyKey: 'abc-123',
+      });
+      const second = await service.generateStatic('merchant-1', actor, {
+        idempotencyKey: 'abc-123',
+      });
+
+      expect(repository.persistQrGeneration).toHaveBeenCalledTimes(1);
+      expect(second).toEqual(first);
+    });
+
+    it('replays the cached result for a retried dynamic QR request with the same key, without minting a new QrPayloadVersion', async () => {
+      const redis = createMockRedis();
+      const { service, repository } = buildService({}, {}, redis);
+
+      const first = await service.generateDynamic('merchant-1', actor, {
+        amount: '150000',
+        idempotencyKey: 'dyn-key-1',
+      });
+      const second = await service.generateDynamic('merchant-1', actor, {
+        amount: '150000',
+        idempotencyKey: 'dyn-key-1',
+      });
+
+      expect(repository.persistQrGeneration).toHaveBeenCalledTimes(1);
+      expect(repository.supersedeActiveDynamicQrs).toHaveBeenCalledTimes(1);
+      expect(second).toEqual(first);
+    });
+
+    it('rejects a concurrent request sharing the same key while the first is still in flight', async () => {
+      const redis = createMockRedis();
+      redis.store.set('qr:idem:merchant-1:dynamic:concurrent-1', '__PROCESSING__');
+      const { service } = buildService({}, {}, redis);
+
+      await expect(
+        service.generateDynamic('merchant-1', actor, {
+          amount: '1000',
+          idempotencyKey: 'concurrent-1',
+        }),
+      ).rejects.toThrow('already being processed');
+    });
+
+    it('releases the lock on failure so a subsequent retry with the same key can succeed', async () => {
+      const redis = createMockRedis();
+      const persistQrGeneration = jest
+        .fn()
+        .mockRejectedValueOnce(new Error('boom'))
+        .mockResolvedValueOnce({ id: 'qr-1', status: 'ACTIVE', payloadVersionId: 'pv-1' });
+      const { service } = buildService({ persistQrGeneration }, {}, redis);
+
+      await expect(
+        service.generateStatic('merchant-1', actor, { idempotencyKey: 'retry-after-fail' }),
+      ).rejects.toThrow('boom');
+
+      const result = await service.generateStatic('merchant-1', actor, {
+        idempotencyKey: 'retry-after-fail',
+      });
+
+      expect(result.success).toBe(true);
+      expect(persistQrGeneration).toHaveBeenCalledTimes(2);
+    });
+
+    it('does not de-duplicate when no Idempotency-Key is supplied', async () => {
+      const redis = createMockRedis();
+      const { service, repository } = buildService({}, {}, redis);
+
+      await service.generateStatic('merchant-1', actor, {});
+      await service.generateStatic('merchant-1', actor, {});
+
+      expect(repository.persistQrGeneration).toHaveBeenCalledTimes(2);
+      expect(redis.set).not.toHaveBeenCalled();
     });
   });
 });

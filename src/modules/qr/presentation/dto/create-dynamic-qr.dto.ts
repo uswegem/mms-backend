@@ -41,4 +41,12 @@ export class CreateDynamicQrDto {
   @Min(1)
   @Max(24 * 60)
   expires_in_minutes?: number;
+
+  @ApiPropertyOptional({
+    description:
+      'Client-generated key to safely retry this request without generating a duplicate QR — prefer the Idempotency-Key header instead.',
+  })
+  @IsOptional()
+  @IsString()
+  idempotency_key?: string;
 }
