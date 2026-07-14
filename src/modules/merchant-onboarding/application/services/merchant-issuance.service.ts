@@ -2,6 +2,7 @@ import { Injectable } from '@nestjs/common';
 import { PrismaService } from '@infrastructure/database/prisma/prisma.service';
 import { MerchantAliasService } from '@modules/alias/application/services/merchant-alias.service';
 import { QrRepository } from '@modules/qr/infrastructure/persistence/qr.repository';
+import { DEFAULT_TIPS_ACQUIRER_ID5 } from '@shared/domain/alias/alias.constants';
 
 @Injectable()
 export class MerchantIssuanceService {
@@ -37,7 +38,7 @@ export class MerchantIssuanceService {
         postalCode: merchant.profile?.postalCode ?? '00000',
         mcc: merchant.mcc,
         publicAlias: alias.alias8digit,
-        acquirerId5: merchant.acquirer.tipsAcquirerId5 ?? undefined,
+        acquirerId5: merchant.acquirer.tipsAcquirerId5 ?? DEFAULT_TIPS_ACQUIRER_ID5,
         createdBy: actorId,
       });
     }

@@ -195,12 +195,13 @@ const ROLES: Array<{
 async function main() {
   const acquirer = await prisma.acquirer.upsert({
     where: { code: 'DEMO' },
-    update: {},
+    update: { tipsAcquirerId5: '01044' },
     create: {
       code: 'DEMO',
       legalName: 'Demo Acquirer Bank PLC',
       tradingName: 'Demo Acquirer',
       status: 'ACTIVE',
+      tipsAcquirerId5: '01044',
     },
   });
 

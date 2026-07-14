@@ -30,11 +30,11 @@ describe('buildTLV', () => {
 });
 
 describe('buildTanqrPayload', () => {
-  it('builds static merchant sample payload', () => {
+  it('builds static merchant sample payload with acquirer 01044 and block 781', () => {
     const { tlvPayload, crcValue } = buildTanqrPayload({
       poiMethod: '11',
-      acquirerId5: '01001',
-      publicAlias: '12345678',
+      acquirerId5: '01044',
+      publicAlias: '78100019',
       mcc: '5814',
       merchantName: 'YN RESTAURANTS',
       city: 'DODOMA',
@@ -45,9 +45,25 @@ describe('buildTanqrPayload', () => {
       },
     });
     expect(tlvPayload).toBe(
-      '00020101021126390014tz.go.bot.tips0105010010208123456785204581453038345802TZ5914YN RESTAURANTS6006DODOMA610541000622103080011234907051100263047D47',
+      '00020101021126390014tz.go.bot.tips0105010440208781000195204581453038345802TZ5914YN RESTAURANTS6006DODOMA61054100062210308001123490705110026304D859',
     );
-    expect(crcValue).toBe('7D47');
+    expect(crcValue).toBe('D859');
+    expect(tlvPayload).toContain('010501044');
+    expect(tlvPayload).toContain('020878100019');
+  });
+
+  it('rejects Merchant ID outside Lipa Namba blocks 780/781/782', () => {
+    expect(() =>
+      buildTanqrPayload({
+        poiMethod: '11',
+        acquirerId5: '01044',
+        publicAlias: '12345678',
+        mcc: '5814',
+        merchantName: 'YN RESTAURANTS',
+        city: 'DODOMA',
+        postalCode: '41000',
+      }),
+    ).toThrow('Merchant ID must start with Lipa Namba block 780, 781, or 782');
   });
 
   it('builds school static payload', () => {

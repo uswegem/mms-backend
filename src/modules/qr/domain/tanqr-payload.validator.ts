@@ -1,5 +1,6 @@
 import { crc16 } from './crc16';
 import { TlvValidationError } from './tlv.builder';
+import { VALID_LIPA_NAMBA_BLOCKS } from '@shared/domain/alias/alias.constants';
 
 const CRC_TAG_PATTERN = /^(.*)6304([0-9A-F]{4})$/i;
 
@@ -41,6 +42,26 @@ export function validateMerchantId(merchantId: string): string {
   }
   if (normalized.length > 15) {
     throw new TlvValidationError('Merchant ID must not exceed 15 digits');
+  }
+  return normalized;
+}
+
+/**
+ * TIPS Lipa Namba (tag 26/02): 8 digits starting with acquirer blocks 780, 781, or 782.
+ * 780 = schools; 781/782 = other merchants.
+ * Damm checksum is enforced when aliases are issued; build-time only checks block + length
+ * so published sample payloads remain buildable.
+ */
+export function validateLipaNambaMerchantId(merchantId: string): string {
+  const normalized = validateMerchantId(merchantId);
+  if (!/^\d{8}$/.test(normalized)) {
+    throw new TlvValidationError('Merchant ID (Lipa Namba) must be exactly 8 digits');
+  }
+  const block = normalized.slice(0, 3);
+  if (!(VALID_LIPA_NAMBA_BLOCKS as readonly string[]).includes(block)) {
+    throw new TlvValidationError(
+      'Merchant ID must start with Lipa Namba block 780, 781, or 782',
+    );
   }
   return normalized;
 }

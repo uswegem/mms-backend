@@ -2,6 +2,7 @@ import { Injectable, NotFoundException } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
 import { PrismaService } from '@infrastructure/database/prisma/prisma.service';
 import { buildEightDigitId } from '@shared/domain/alias/damm.util';
+import { LIPA_NAMBA_BLOCKS } from '@shared/domain/alias/alias.constants';
 import { AliasRepository } from '@modules/alias/infrastructure/persistence/alias.repository';
 
 type Tx = Prisma.TransactionClient;
@@ -13,7 +14,8 @@ export class MerchantAliasService {
     private readonly aliases: AliasRepository,
   ) {}
 
-  async issueSchoolMerchantAlias(merchantId: string) {
+  /** Issue Lipa Namba: 780 for schools, 781/782 for other merchants. */
+  async issueMerchantAlias(merchantId: string) {
     const existing = await this.aliases.findMerchantAlias(merchantId);
     if (existing) {
       const schoolSeq = await this.prisma.schoolSequence.findUnique({
@@ -27,7 +29,10 @@ export class MerchantAliasService {
     });
 
     return this.prisma.$transaction(async (tx) => {
-      const generated = await this.aliases.generatePublicAlias(tx);
+      const block = merchant.isSchool
+        ? LIPA_NAMBA_BLOCKS.SCHOOL
+        : await this.aliases.resolveMerchantBlock(tx);
+      const generated = await this.aliases.generatePublicAlias(tx, block);
       const alias = await tx.merchantAlias.create({
         data: {
           merchantId,
@@ -38,11 +43,20 @@ export class MerchantAliasService {
         },
       });
 
-      const schoolSeq = await this.ensureSchoolSequence(tx, merchantId, merchant.acquirerId);
-      const internalId = buildEightDigitId(schoolSeq.schoolSeq3, '0000');
+      let schoolSeq = null;
+      let internalId: string | undefined;
+      if (merchant.isSchool) {
+        schoolSeq = await this.ensureSchoolSequence(tx, merchantId, merchant.acquirerId);
+        internalId = buildEightDigitId(schoolSeq.schoolSeq3, '0000');
+      }
 
       return { alias, schoolSeq, internalId };
     });
+  }
+
+  /** @deprecated Use issueMerchantAlias — school sequences are only created when isSchool. */
+  async issueSchoolMerchantAlias(merchantId: string) {
+    return this.issueMerchantAlias(merchantId);
   }
 
   private async ensureSchoolSequence(tx: Tx, merchantId: string, acquirerId: string) {

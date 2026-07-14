@@ -1,6 +1,8 @@
 /**
  * Dev helper: issue Lipa Namba alias for an ACTIVE merchant missing one.
  * Usage: node scripts/issue-merchant-alias.mjs <merchantId>
+ *
+ * Blocks: 780 = schools, 781/782 = other merchants
  */
 import { PrismaClient } from '@prisma/client';
 
@@ -17,8 +19,6 @@ const DAMM_TABLE = [
   [9, 5, 6, 7, 8, 1, 2, 3, 4, 0],
 ];
 
-const LIPA_NAMBA_PREFIX = '780';
-
 function dammCheckDigit(digits) {
   let interim = 0;
   for (const d of digits) interim = DAMM_TABLE[interim][d];
@@ -32,13 +32,22 @@ function buildEightDigitId(prefix, sequence) {
   return `${body}${dammCheckDigit(digits)}`;
 }
 
-async function nextGlobalSeq4(tx) {
+async function nextSeq4(tx, block) {
   const row = await tx.globalAliasSequence.upsert({
-    where: { id: 'GLOBAL' },
+    where: { id: `BLOCK_${block}` },
     update: { lastSeq: { increment: 1 } },
-    create: { id: 'GLOBAL', lastSeq: 1 },
+    create: { id: `BLOCK_${block}`, lastSeq: 1 },
   });
+  if (row.lastSeq > 9999) throw new Error(`Block ${block} exhausted`);
   return row.lastSeq.toString().padStart(4, '0');
+}
+
+async function resolveMerchantBlock(tx) {
+  const primary = await tx.globalAliasSequence.findUnique({
+    where: { id: 'BLOCK_781' },
+  });
+  if (!primary || primary.lastSeq < 9999) return '781';
+  return '782';
 }
 
 async function main() {
@@ -61,20 +70,23 @@ async function main() {
     }
 
     const alias = await prisma.$transaction(async (tx) => {
-      const seq4 = await nextGlobalSeq4(tx);
-      const alias8digit = buildEightDigitId(LIPA_NAMBA_PREFIX, seq4);
+      const block = merchant.isSchool ? '780' : await resolveMerchantBlock(tx);
+      const seq4 = await nextSeq4(tx, block);
+      const alias8digit = buildEightDigitId(block, seq4);
       return tx.merchantAlias.create({
         data: {
           merchantId,
           alias8digit,
-          acquirerCode3: LIPA_NAMBA_PREFIX,
+          acquirerCode3: block,
           merchantCode4: seq4,
           checksum1: alias8digit[7],
         },
       });
     });
 
-    console.log(`✓ Issued Lipa Namba ${alias.alias8digit} for ${merchant.tradingName}`);
+    console.log(
+      `✓ Issued Lipa Namba ${alias.alias8digit} (block ${alias.acquirerCode3}) for ${merchant.tradingName}`,
+    );
   } finally {
     await prisma.$disconnect();
   }

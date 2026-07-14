@@ -5,6 +5,10 @@ import {
 import { Prisma } from '@prisma/client';
 import { PrismaService } from '@infrastructure/database/prisma/prisma.service';
 import { buildEightDigitId } from '@shared/domain/alias/damm.util';
+import {
+  DEFAULT_TIPS_ACQUIRER_ID5,
+  LIPA_NAMBA_BLOCKS,
+} from '@shared/domain/alias/alias.constants';
 import { AliasRepository } from '@modules/alias/infrastructure/persistence/alias.repository';
 import { QrRepository } from '@modules/qr/infrastructure/persistence/qr.repository';
 
@@ -205,7 +209,10 @@ export class StudentAliasService {
     });
     const studentSeq4 = updatedSeq.lastStudentSeq.toString().padStart(4, '0');
 
-    const generated = await this.aliases.generatePublicAlias(tx);
+    const generated = await this.aliases.generatePublicAlias(
+      tx,
+      LIPA_NAMBA_BLOCKS.SCHOOL,
+    );
     const internalId8digit = buildEightDigitId(
       schoolSeq.schoolSeq3,
       studentSeq4,
@@ -224,7 +231,7 @@ export class StudentAliasService {
       postalCode: merchant.profile?.postalCode ?? '11000',
       mcc: merchant.mcc,
       publicAlias: generated.alias8digit,
-      acquirerId5: merchant.acquirer.tipsAcquirerId5 ?? undefined,
+      acquirerId5: merchant.acquirer.tipsAcquirerId5 ?? DEFAULT_TIPS_ACQUIRER_ID5,
       internalRoutingId: internalId8digit,
       createdBy: actorId,
     }, tx);

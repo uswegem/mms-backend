@@ -2,9 +2,10 @@ import { buildNestedTLV, buildTLV } from './tlv.builder';
 import { crc16 } from './crc16';
 import {
   validateAcquirerId5,
-  validateMerchantId,
+  validateLipaNambaMerchantId,
   validateTag62Content,
 } from './tanqr-payload.validator';
+import { DEFAULT_TIPS_ACQUIRER_ID5 } from '@shared/domain/alias/alias.constants';
 
 export const TANQR_DOMAIN = 'tz.go.bot.tips';
 export const TANQR_CURRENCY = '834';
@@ -55,7 +56,7 @@ function buildTipsMerchantAccountTemplate(
   publicAlias: string,
 ): string {
   const normalizedAcquirer = validateAcquirerId5(acquirerId5);
-  const merchantId = validateMerchantId(publicAlias);
+  const merchantId = validateLipaNambaMerchantId(publicAlias);
   const children =
     buildTLV('00', domain) +
     buildTLV('01', normalizedAcquirer) +
@@ -133,7 +134,7 @@ export function buildStaticTanqrPayload(input: StaticTanqrInput): {
 
   return buildTanqrPayload({
     poiMethod: input.poiMethod ?? '11',
-    acquirerId5: input.acquirerId5 ?? '01044',
+    acquirerId5: input.acquirerId5 ?? DEFAULT_TIPS_ACQUIRER_ID5,
     publicAlias: input.publicAlias,
     mcc: input.mcc,
     merchantName: input.merchantName,
