@@ -6,6 +6,7 @@ import { Prisma } from '@prisma/client';
 import { PrismaService } from '@infrastructure/database/prisma/prisma.service';
 import { buildEightDigitId } from '@shared/domain/alias/damm.util';
 import { AliasRepository } from '@modules/alias/infrastructure/persistence/alias.repository';
+import { SCHOOL_ALIAS_BLOCKS } from '@shared/domain/alias/alias.constants';
 import { QrRepository } from '@modules/qr/infrastructure/persistence/qr.repository';
 import { QrValidators } from '@modules/qr/validators/qr.validators';
 
@@ -207,7 +208,7 @@ export class StudentAliasService {
     });
     const studentSeq4 = updatedSeq.lastStudentSeq.toString().padStart(4, '0');
 
-    const generated = await this.aliases.generatePublicAlias(tx);
+    const generated = await this.aliases.generatePublicAlias(SCHOOL_ALIAS_BLOCKS, tx);
     const internalId8digit = buildEightDigitId(
       schoolSeq.schoolSeq3,
       studentSeq4,

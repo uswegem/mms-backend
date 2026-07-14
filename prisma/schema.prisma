@@ -998,6 +998,10 @@ model MerchantAlias {
   acquirerCode3 String   @map("acquirer_code_3") @db.Char(3)
   merchantCode4 String   @map("merchant_code_4") @db.Char(4)
   checksum1     String   @map("checksum_1") @db.Char(1)
+  /// Denormalized from Merchant.isSchool at issuance time so a DB CHECK
+  /// constraint can enforce block 780 for schools / 781,782 for merchants
+  /// without needing a cross-table lookup.
+  isSchool      Boolean  @default(false) @map("is_school")
   isActive      Boolean  @default(true) @map("is_active")
   createdAt     DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
   updatedAt     DateTime @default(now()) @updatedAt @map("updated_at") @db.Timestamptz(6)

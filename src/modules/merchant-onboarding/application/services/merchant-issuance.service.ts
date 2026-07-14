@@ -32,7 +32,7 @@ export class MerchantIssuanceService {
 
     let alias = merchant.merchantAlias;
     if (!alias) {
-      const issued = await this.aliasService.issueSchoolMerchantAlias(merchantId);
+      const issued = await this.aliasService.issueMerchantAlias(merchantId);
       alias = issued.alias;
     }
 

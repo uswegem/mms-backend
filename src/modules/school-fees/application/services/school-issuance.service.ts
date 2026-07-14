@@ -35,7 +35,7 @@ export class SchoolIssuanceService {
       );
     }
 
-    const issued = await this.merchantAlias.issueSchoolMerchantAlias(app.merchantId);
+    const issued = await this.merchantAlias.issueSchoolAlias(app.merchantId);
     const alias = issued.alias;
     const internalId =
       'internalId' in issued && issued.internalId

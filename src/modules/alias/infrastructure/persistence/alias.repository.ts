@@ -2,7 +2,7 @@ import { Injectable } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
 import { PrismaService } from '@infrastructure/database/prisma/prisma.service';
 import { buildEightDigitId, validateDamm } from '@shared/domain/alias/damm.util';
-import { ALIAS_BLOCKS } from '@shared/domain/alias/alias.constants';
+import { AliasBlock } from '@shared/domain/alias/alias.constants';
 
 type Tx = Prisma.TransactionClient;
 
@@ -11,15 +11,21 @@ export class AliasRepository {
   constructor(private readonly prisma: PrismaService) {}
 
   /**
-   * Atomically claims the next 4-digit sequence slot within a block, trying
-   * blocks in order and rolling over once a block's 0000-9999 space is used
-   * up. The increment and the < 9999 guard live in one UPDATE statement, so
-   * concurrent callers race on a Postgres row lock per block, not a global
-   * lock, and never hand out a slot past a block's capacity.
+   * Atomically claims the next 4-digit sequence slot within one of the given
+   * blocks, trying them in the order passed and rolling over once a block's
+   * 0000-9999 space is used up. The increment and the < 9999 guard live in
+   * one UPDATE statement, so concurrent callers race on a Postgres row lock
+   * per block, not a global lock, and never hand out a slot past a block's
+   * capacity. Callers must pass the block set explicitly (e.g.
+   * SCHOOL_ALIAS_BLOCKS vs MERCHANT_ALIAS_BLOCKS) — this method never infers
+   * which blocks are allowed from context.
    */
-  async allocateAliasSlot(tx?: Tx): Promise<{ block: string; seq4: string }> {
+  async allocateAliasSlot(
+    blocks: readonly AliasBlock[],
+    tx?: Tx,
+  ): Promise<{ block: string; seq4: string }> {
     const client = tx ?? this.prisma;
-    for (const block of ALIAS_BLOCKS) {
+    for (const block of blocks) {
       const rows = await client.$queryRaw<{ last_seq: number }[]>`
         UPDATE alias_block_sequences
         SET last_seq = last_seq + 1
@@ -31,17 +37,20 @@ export class AliasRepository {
       }
     }
     throw new Error(
-      `All TANQR alias blocks (${ALIAS_BLOCKS.join('/')}) are exhausted — provision a new block`,
+      `All allowed TANQR alias blocks (${blocks.join('/')}) are exhausted — provision a new block`,
     );
   }
 
-  async generatePublicAlias(tx?: Tx): Promise<{
+  async generatePublicAlias(
+    blocks: readonly AliasBlock[],
+    tx?: Tx,
+  ): Promise<{
     alias8digit: string;
     acquirerCode3: string;
     aliasSeq4: string;
     checksum1: string;
   }> {
-    const { block, seq4 } = await this.allocateAliasSlot(tx);
+    const { block, seq4 } = await this.allocateAliasSlot(blocks, tx);
     const alias8digit = buildEightDigitId(block, seq4);
     return {
       alias8digit,
