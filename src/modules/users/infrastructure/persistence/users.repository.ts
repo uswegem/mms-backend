@@ -60,6 +60,14 @@ export class UsersRepository {
     });
   }
 
+  /** Includes soft-deleted users (email uniquely constrained per acquirer). */
+  async findByEmailIncludingDeleted(acquirerId: string, email: string) {
+    return this.prisma.user.findFirst({
+      where: { acquirerId, email: email.toLowerCase() },
+      include: userInclude,
+    });
+  }
+
   async create(data: {
     acquirerId: string;
     email: string;
@@ -98,6 +106,70 @@ export class UsersRepository {
         }),
       TX_OPTIONS,
     );
+  }
+
+  /**
+   * Re-open a soft-deleted / inactive user with the same email (unique key).
+   * Resets password, roles, and clears deletedAt.
+   */
+  async reactivate(
+    userId: string,
+    data: {
+      fullName: string;
+      merchantId?: string | null;
+      status: UserStatus;
+      updatedBy: string;
+      roleIds: string[];
+      scopeType: string;
+      scopeId: string | null;
+      passwordHash: string;
+      phone?: string;
+    },
+  ): Promise<UserWithRelations> {
+    return this.prisma.$transaction(async (tx) => {
+      await tx.userRole.deleteMany({ where: { userId } });
+      await tx.refreshToken.updateMany({
+        where: { userId, revokedAt: null },
+        data: { revokedAt: new Date() },
+      });
+
+      await tx.authCredential.upsert({
+        where: { userId },
+        update: { passwordHash: data.passwordHash },
+        create: { userId, passwordHash: data.passwordHash },
+      });
+
+      await tx.userProfile.upsert({
+        where: { userId },
+        update: { phone: data.phone },
+        create: { userId, phone: data.phone },
+      });
+
+      if (data.roleIds.length) {
+        await tx.userRole.createMany({
+          data: data.roleIds.map((roleId) => ({
+            userId,
+            roleId,
+            scopeType: data.scopeType,
+            scopeId: data.scopeId,
+            createdBy: data.updatedBy,
+          })),
+        });
+      }
+
+      return tx.user.update({
+        where: { id: userId },
+        data: {
+          fullName: data.fullName,
+          merchantId: data.merchantId,
+          status: data.status,
+          deletedAt: null,
+          deletedBy: null,
+          updatedBy: data.updatedBy,
+        },
+        include: userInclude,
+      });
+    }, TX_OPTIONS);
   }
 
   async update(

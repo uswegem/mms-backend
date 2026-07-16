@@ -93,6 +93,11 @@ export class CreateUserResponseDto {
     description: 'Returned in development when email was not sent',
   })
   temporaryPassword?: string;
+
+  @ApiPropertyOptional({
+    description: 'True when a previously deactivated user was restored',
+  })
+  reactivated?: boolean;
 }
 
 export class UpdateUserDto {

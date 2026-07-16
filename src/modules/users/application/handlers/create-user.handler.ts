@@ -22,6 +22,8 @@ export interface CreateUserResult {
   user: UserResponseDto;
   emailSent?: boolean;
   temporaryPassword?: string;
+  /** True when a soft-deleted account with this email was restored. */
+  reactivated?: boolean;
 }
 
 @CommandHandler(CreateUserCommand)
@@ -42,11 +44,11 @@ export class CreateUserHandler
   async execute(command: CreateUserCommand): Promise<CreateUserResult> {
     this.scope.requirePermission(command.actor, Permission.USER_WRITE);
 
-    const existing = await this.users.findByEmail(
+    const existing = await this.users.findByEmailIncludingDeleted(
       command.actor.acquirerId,
       command.email,
     );
-    if (existing) {
+    if (existing && !existing.deletedAt) {
       throw new UserConflictException('A user with this email already exists');
     }
 
@@ -71,26 +73,43 @@ export class CreateUserHandler
     const tempPassword = randomBytes(12).toString('base64url').slice(0, 16);
     const passwordHash = await this.passwordHasher.hash(tempPassword);
 
-    const user = await this.users.create({
-      acquirerId: command.actor.acquirerId,
-      email: command.email,
-      fullName: command.fullName,
-      merchantId: scope.merchantId,
-      status: 'ACTIVE',
-      createdBy: command.actor.sub,
-      roleIds: command.roleIds,
-      scopeType: scope.scopeType,
-      scopeId: scope.scopeId,
-      passwordHash,
-      phone: command.phone,
-    });
+    const isReactivation = Boolean(existing?.deletedAt);
+    const user = isReactivation
+      ? await this.users.reactivate(existing!.id, {
+          fullName: command.fullName,
+          merchantId: scope.merchantId,
+          status: 'ACTIVE',
+          updatedBy: command.actor.sub,
+          roleIds: command.roleIds,
+          scopeType: scope.scopeType,
+          scopeId: scope.scopeId,
+          passwordHash,
+          phone: command.phone,
+        })
+      : await this.users.create({
+          acquirerId: command.actor.acquirerId,
+          email: command.email,
+          fullName: command.fullName,
+          merchantId: scope.merchantId,
+          status: 'ACTIVE',
+          createdBy: command.actor.sub,
+          roleIds: command.roleIds,
+          scopeType: scope.scopeType,
+          scopeId: scope.scopeId,
+          passwordHash,
+          phone: command.phone,
+        });
 
     await this.audit.record({
       actorId: command.actor.sub,
-      action: 'USER_CREATED',
+      action: isReactivation ? 'USER_REACTIVATED' : 'USER_CREATED',
       entityType: 'user',
       entityId: user.id,
-      metadata: { email: user.email, roles: roles.map((r) => r.code) },
+      metadata: {
+        email: user.email,
+        roles: roles.map((r) => r.code),
+        reactivated: isReactivation,
+      },
     });
 
     let emailSent = false;
@@ -115,6 +134,7 @@ export class CreateUserHandler
       user: toUserResponse(user),
       emailSent,
       temporaryPassword: isDev && !emailSent ? tempPassword : undefined,
+      reactivated: isReactivation,
     };
   }
 }
