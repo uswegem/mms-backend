@@ -8,5 +8,6 @@ export class CreateUserCommand {
     public readonly roleIds: string[],
     public readonly merchantId?: string,
     public readonly phone?: string,
+    public readonly password?: string,
   ) {}
 }

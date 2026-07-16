@@ -8,6 +8,7 @@ import {
   IsUUID,
   MinLength,
 } from 'class-validator';
+import { IsStrongPassword } from '@shared/infrastructure/validators/password.validator';
 
 export class UserRoleDto {
   @ApiProperty()
@@ -80,6 +81,17 @@ export class CreateUserDto {
   @IsOptional()
   @IsString()
   phone?: string;
+
+  @ApiPropertyOptional({
+    minLength: 12,
+    description:
+      'Initial login password. If omitted, a temporary password is generated.',
+  })
+  @IsOptional()
+  @IsString()
+  @MinLength(12)
+  @IsStrongPassword()
+  password?: string;
 }
 
 export class CreateUserResponseDto {

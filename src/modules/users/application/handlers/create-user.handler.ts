@@ -70,8 +70,11 @@ export class CreateUserHandler
       scope.merchantId,
     );
 
-    const tempPassword = randomBytes(12).toString('base64url').slice(0, 16);
-    const passwordHash = await this.passwordHasher.hash(tempPassword);
+    const passwordProvided = Boolean(command.password?.trim());
+    const plainPassword =
+      command.password?.trim() ||
+      randomBytes(12).toString('base64url').slice(0, 16);
+    const passwordHash = await this.passwordHasher.hash(plainPassword);
 
     const isReactivation = Boolean(existing?.deletedAt);
     const user = isReactivation
@@ -109,16 +112,18 @@ export class CreateUserHandler
         email: user.email,
         roles: roles.map((r) => r.code),
         reactivated: isReactivation,
+        passwordSetByAdmin: passwordProvided,
       },
     });
 
     let emailSent = false;
-    if (this.email.isEnabled()) {
+    // Only email credentials when the system generated a temporary password.
+    if (!passwordProvided && this.email.isEnabled()) {
       try {
         emailSent = await this.email.sendWelcomeCredentials({
           to: user.email,
           fullName: user.fullName,
-          temporaryPassword: tempPassword,
+          temporaryPassword: plainPassword,
         });
       } catch (err) {
         this.logger.error(
@@ -133,7 +138,8 @@ export class CreateUserHandler
     return {
       user: toUserResponse(user),
       emailSent,
-      temporaryPassword: isDev && !emailSent ? tempPassword : undefined,
+      temporaryPassword:
+        !passwordProvided && isDev && !emailSent ? plainPassword : undefined,
       reactivated: isReactivation,
     };
   }
