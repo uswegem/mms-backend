@@ -27,14 +27,6 @@ function buildTx(overrides: Partial<Record<string, unknown>> = {}) {
         Promise.resolve({ id: 'student-1', merchantId: 'merchant-1', ...args.data }),
       ),
     },
-    schoolSequence: {
-      findUnique: jest
-        .fn()
-        .mockResolvedValue({ merchantId: 'merchant-1', schoolSeq3: '001', lastStudentSeq: 0 }),
-      update: jest
-        .fn()
-        .mockResolvedValue({ merchantId: 'merchant-1', schoolSeq3: '001', lastStudentSeq: 1 }),
-    },
     merchant: {
       findUniqueOrThrow: jest.fn().mockResolvedValue({
         id: 'merchant-1',
@@ -65,11 +57,10 @@ describe('StudentAliasService', () => {
       ...prismaOverrides,
     };
     const aliases = {
-      generatePublicAlias: jest.fn().mockResolvedValue({
-        alias8digit: '78000001',
+      generateStudentAlias: jest.fn().mockResolvedValue({
+        alias10digit: '7800000015',
         acquirerCode3: '780',
-        aliasSeq4: '0001',
-        checksum1: '1',
+        aliasSeq6: '000001',
       }),
     };
     const qr = {
@@ -99,6 +90,36 @@ describe('StudentAliasService', () => {
       clientVersion: '6.19.3',
     });
   }
+
+  describe('10-digit alias generation', () => {
+    it('calls generateStudentAlias and stores alias10digit on the created alias row', async () => {
+      const { service, aliases, tx } = buildService();
+
+      const result = await service.createStudent('merchant-1', {
+        admissionNo: 'ADM-001',
+        fullName: 'A B',
+      });
+
+      expect(aliases.generateStudentAlias).toHaveBeenCalledTimes(1);
+      expect(tx.studentAlias.create).toHaveBeenCalledWith(
+        expect.objectContaining({
+          data: expect.objectContaining({ alias10digit: '7800000015', aliasSeq6: '000001' }),
+        }),
+      );
+      expect((result as any).alias.alias10digit).toBe('7800000015');
+    });
+
+    it('does not pass internalRoutingId to createStaticQr (tag 62/05 dropped)', async () => {
+      const { service, qr } = buildService();
+
+      await service.createStudent('merchant-1', { admissionNo: 'ADM-001', fullName: 'A B' });
+
+      expect(qr.createStaticQr).toHaveBeenCalledWith(
+        expect.not.objectContaining({ internalRoutingId: expect.anything() }),
+        expect.anything(),
+      );
+    });
+  });
 
   describe('race condition: concurrent duplicate admission number', () => {
     it('translates a unique-constraint violation on student.create into the same friendly error a sequential duplicate gets', async () => {

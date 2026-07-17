@@ -79,12 +79,9 @@ describe('Alias block/entity-type DB guard (e2e)', () => {
         data: {
           studentId: student.id,
           merchantId,
-          alias8digit: '78199103',
-          internalId8digit: '00100001',
+          alias10digit: '7819910306',
           acquirerCode3: '781',
-          aliasSeq4: '9103',
-          schoolSeq3: '001',
-          studentSeq4: '0001',
+          aliasSeq6: '910300',
         },
       });
     });
@@ -122,12 +119,9 @@ describe('Alias block/entity-type DB guard (e2e)', () => {
         data: {
           studentId: student.id,
           merchantId,
-          alias8digit: '78099202',
-          internalId8digit: '00100002',
+          alias10digit: '7800000015',
           acquirerCode3: '780',
-          aliasSeq4: '9202',
-          schoolSeq3: '001',
-          studentSeq4: '0002',
+          aliasSeq6: '000001',
         },
       });
       expect(alias.acquirerCode3).toBe('780');

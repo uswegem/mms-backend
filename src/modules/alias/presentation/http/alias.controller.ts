@@ -28,9 +28,9 @@ export class AliasController {
 
   @Post('alias/validate')
   @Public()
-  @ApiOperation({ summary: 'Validate 8-digit Lipa Namba checksum' })
+  @ApiOperation({ summary: 'Validate Lipa Namba checksum (8-digit merchant or 10-digit student)' })
   validate(@Body() dto: ValidateAliasDto) {
-    return this.aliases.validateAlias(dto.alias8digit);
+    return this.aliases.validateAlias(dto.alias);
   }
 
   @Get('alias/lookup/:alias')

@@ -21,7 +21,7 @@ import { PermissionsGuard } from './auth/rbac/guards/permissions.guard';
     HealthModule,
     RedisModule,
     IdempotencyModule,
-    QueueModule,
+    QueueModule.register(),
     SupabaseModule,
     EmailModule,
   ],

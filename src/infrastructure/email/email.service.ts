@@ -9,6 +9,18 @@ export interface WelcomeCredentialsEmail {
   temporaryPassword: string;
 }
 
+export interface SendEmailOptions {
+  to: string;
+  subject: string;
+  text: string;
+  html?: string;
+  attachments?: Array<{
+    filename: string;
+    content: Buffer;
+    contentType: string;
+  }>;
+}
+
 @Injectable()
 export class EmailService implements OnModuleInit {
   private readonly logger = new Logger(EmailService.name);
@@ -87,6 +99,25 @@ export class EmailService implements OnModuleInit {
     });
 
     this.logger.log(`Welcome email sent to ${params.to}`);
+    return true;
+  }
+
+  async sendEmail(opts: SendEmailOptions): Promise<boolean> {
+    if (!this.transporter) return false;
+    const from = this.config.get<string>('mail.from')!;
+    await this.transporter.sendMail({
+      from,
+      to: opts.to,
+      subject: opts.subject,
+      text: opts.text,
+      html: opts.html,
+      attachments: opts.attachments?.map((a) => ({
+        filename: a.filename,
+        content: a.content,
+        contentType: a.contentType,
+      })),
+    });
+    this.logger.log(`Email sent to ${opts.to}: ${opts.subject}`);
     return true;
   }
 

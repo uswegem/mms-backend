@@ -2,14 +2,22 @@ import {
   BadRequestException,
   Injectable,
 } from '@nestjs/common';
+import { AmqpConnection } from '@golevelup/nestjs-rabbitmq';
+import { ConfigService } from '@nestjs/config';
 import { Prisma } from '@prisma/client';
 import { PrismaService } from '@infrastructure/database/prisma/prisma.service';
 import { IdempotencyService } from '@infrastructure/idempotency/idempotency.service';
-import { buildEightDigitId } from '@shared/domain/alias/damm.util';
-import { AliasRepository } from '@modules/alias/infrastructure/persistence/alias.repository';
-import { SCHOOL_ALIAS_BLOCKS } from '@shared/domain/alias/alias.constants';
+import {
+  AliasRepository,
+  StudentAliasCapacityExceededException,
+} from '@modules/alias/infrastructure/persistence/alias.repository';
 import { QrRepository } from '@modules/qr/infrastructure/persistence/qr.repository';
 import { QrValidators } from '@modules/qr/validators/qr.validators';
+import {
+  QUEUE_ROUTING,
+  type StudentAliasGeneratePayload,
+} from '@infrastructure/queue/queue.constants';
+import type { CsvImportRow } from './bulk-student-upload.service';
 
 type Tx = Prisma.TransactionClient;
 
@@ -17,8 +25,7 @@ export interface CreateStudentInput {
   admissionNo: string;
   fullName: string;
   guardianPhone?: string;
-  /** Client-supplied key (e.g. Idempotency-Key header) to de-duplicate a
-   * retried POST — see IdempotencyService. */
+  parentEmail?: string;
   idempotencyKey?: string;
 }
 
@@ -26,15 +33,30 @@ export interface BulkStudentRow extends CreateStudentInput {
   row: number;
 }
 
+export interface BatchConfirmResult {
+  batchId: string;
+  total: number;
+  queued: number;
+  skipped: number;
+}
+
 @Injectable()
 export class StudentAliasService {
+  private readonly exchange: string;
+
   constructor(
     private readonly prisma: PrismaService,
     private readonly aliases: AliasRepository,
     private readonly qr: QrRepository,
     private readonly qrValidators: QrValidators,
     private readonly idempotency: IdempotencyService,
-  ) {}
+    private readonly amqp: AmqpConnection,
+    private readonly config: ConfigService,
+  ) {
+    this.exchange = config.get<string>('rabbitmq.exchange') ?? 'mms.events';
+  }
+
+  // ── List ──────────────────────────────────────────────────────────────────
 
   async listStudents(merchantId: string) {
     return this.prisma.student.findMany({
@@ -43,6 +65,8 @@ export class StudentAliasService {
       orderBy: { createdAt: 'desc' },
     });
   }
+
+  // ── Single enrol (synchronous: student + alias in one transaction) ────────
 
   async createStudent(
     merchantId: string,
@@ -87,6 +111,7 @@ export class StudentAliasService {
               admissionNo: input.admissionNo,
               fullName: input.fullName,
               guardianPhone: input.guardianPhone,
+              parentEmail: input.parentEmail,
             },
           }));
 
@@ -94,13 +119,11 @@ export class StudentAliasService {
         return { student, alias };
       });
     } catch (err) {
-      // Two concurrent requests can both pass the findFirst check above
-      // before either commits — the unique (merchantId, admissionNo)
-      // constraint is the real guard here. Without this, a genuine race
-      // (not just a same-key retry, which withKey already dedupes) would
-      // surface as a raw, unhandled Prisma error instead of the same
-      // friendly message a sequential duplicate gets.
-      if (err instanceof Prisma.PrismaClientKnownRequestError && err.code === 'P2002') {
+      if (err instanceof StudentAliasCapacityExceededException) throw err;
+      if (
+        err instanceof Prisma.PrismaClientKnownRequestError &&
+        err.code === 'P2002'
+      ) {
         throw new BadRequestException(
           `Student with admission ${input.admissionNo} already enrolled`,
         );
@@ -108,6 +131,179 @@ export class StudentAliasService {
       throw err;
     }
   }
+
+  // ── Async bulk confirm: creates Student records, queues alias generation ──
+
+  async confirmBulkImport(
+    merchantId: string,
+    rows: CsvImportRow[],
+    actorId?: string,
+  ): Promise<BatchConfirmResult> {
+    await this.assertSchoolMerchant(merchantId);
+
+    const batchId = crypto.randomUUID();
+    let queued = 0;
+    let skipped = 0;
+
+    const rabbitmqEnabled = this.config.get<boolean>('rabbitmq.enabled') === true;
+
+    for (const row of rows) {
+      try {
+        const existing = await this.prisma.student.findFirst({
+          where: { merchantId, admissionNo: row.admissionNo, deletedAt: null },
+          include: { studentAlias: true },
+        });
+
+        if (existing?.studentAlias?.isActive) {
+          skipped++;
+          continue;
+        }
+
+        // Create or update student record (no alias yet)
+        let studentId: string;
+        if (existing) {
+          // Reactivate on next alias issue
+          await this.prisma.student.update({
+            where: { id: existing.id },
+            data: {
+              fullName: row.fullName,
+              guardianPhone: row.guardianPhone ?? existing.guardianPhone,
+              parentEmail: row.parentEmail ?? existing.parentEmail,
+              isActive: true,
+              status: 'ACTIVE',
+            },
+          });
+          studentId = existing.id;
+        } else {
+          const student = await this.prisma.student.create({
+            data: {
+              merchantId,
+              admissionNo: row.admissionNo,
+              fullName: row.fullName,
+              guardianPhone: row.guardianPhone,
+              parentEmail: row.parentEmail,
+            },
+          });
+          studentId = student.id;
+        }
+
+        // Publish alias-generation task to RabbitMQ
+        const payload: StudentAliasGeneratePayload = {
+          studentId,
+          merchantId,
+          actorId,
+          batchId,
+          row: row.row,
+        };
+
+        if (rabbitmqEnabled) {
+          await this.amqp.publish(
+            this.exchange,
+            QUEUE_ROUTING.STUDENT_ALIAS_GENERATE,
+            payload,
+          );
+        } else {
+          // Fallback: synchronous for dev environments without RabbitMQ
+          await this.prisma.$transaction(async (tx) =>
+            this.issueStudentAlias(tx, merchantId, studentId, actorId),
+          );
+        }
+
+        queued++;
+      } catch {
+        skipped++;
+      }
+    }
+
+    return { batchId, total: rows.length, queued, skipped };
+  }
+
+  // ── Issue alias (called by consumer or direct enrol) ─────────────────────
+
+  async issueStudentAliasById(studentId: string, merchantId: string, actorId?: string) {
+    return this.prisma.$transaction(async (tx) =>
+      this.issueStudentAlias(tx, merchantId, studentId, actorId),
+    );
+  }
+
+  // ── Send QR to parent (queues email + SMS notifications) ─────────────────
+
+  async sendQrToParent(
+    studentId: string,
+    channels: ('email' | 'sms')[],
+  ): Promise<{ emailQueued: boolean; smsQueued: boolean }> {
+    const student = await this.prisma.student.findUniqueOrThrow({
+      where: { id: studentId },
+      include: {
+        studentAlias: { include: { qrCode: { include: { payloadVersions: true } } } },
+        merchant: true,
+      },
+    });
+
+    if (!student.studentAlias) {
+      throw new BadRequestException('Student has no active Lipa Namba alias');
+    }
+
+    const tlvPayload = student.studentAlias.qrCode?.payloadVersions[0]?.tlvPayload;
+    const rabbitmqEnabled = this.config.get<boolean>('rabbitmq.enabled') === true;
+
+    let emailQueued = false;
+    let smsQueued = false;
+
+    if (channels.includes('email') && student.parentEmail && tlvPayload) {
+      const emailPayload = {
+        studentId,
+        parentEmail: student.parentEmail,
+        fullName: student.fullName,
+        alias10digit: student.studentAlias.alias10digit,
+        schoolName: student.merchant.tradingName,
+        tlvPayload,
+      };
+      if (rabbitmqEnabled) {
+        await this.amqp.publish(
+          this.exchange,
+          QUEUE_ROUTING.NOTIFICATION_QR_EMAIL,
+          emailPayload,
+        );
+      }
+      emailQueued = true;
+    }
+
+    if (channels.includes('sms') && student.guardianPhone) {
+      const smsPayload = {
+        guardianPhone: student.guardianPhone,
+        fullName: student.fullName,
+        alias10digit: student.studentAlias.alias10digit,
+        schoolName: student.merchant.tradingName,
+      };
+      if (rabbitmqEnabled) {
+        await this.amqp.publish(
+          this.exchange,
+          QUEUE_ROUTING.NOTIFICATION_QR_SMS,
+          smsPayload,
+        );
+      }
+      smsQueued = true;
+    }
+
+    return { emailQueued, smsQueued };
+  }
+
+  // ── Fetch student with full alias + QR data (for PDF endpoint) ───────────
+
+  async getStudentWithQr(studentId: string) {
+    return this.prisma.student.findUniqueOrThrow({
+      where: { id: studentId },
+      include: {
+        studentAlias: {
+          include: { qrCode: { include: { payloadVersions: true } } },
+        },
+        merchant: true,
+      },
+    });
+  }
+
+  // ── Legacy synchronous bulk (kept for backward compat) ────────────────────
 
   async bulkUpload(
     merchantId: string,
@@ -140,11 +336,7 @@ export class StudentAliasService {
     for (const row of rows) {
       try {
         const existing = await this.prisma.student.findFirst({
-          where: {
-            merchantId,
-            admissionNo: row.admissionNo,
-            deletedAt: null,
-          },
+          where: { merchantId, admissionNo: row.admissionNo, deletedAt: null },
           include: { studentAlias: true },
         });
 
@@ -156,7 +348,7 @@ export class StudentAliasService {
               admissionNo: row.admissionNo,
               status: 'reactivated',
               studentId: existing.id,
-              lipaNamba: existing.studentAlias.alias8digit,
+              lipaNamba: existing.studentAlias.alias10digit,
             });
           } else {
             results.push({
@@ -165,7 +357,7 @@ export class StudentAliasService {
               status: 'error',
               message: 'Student already active — alias unchanged',
               studentId: existing.id,
-              lipaNamba: existing.studentAlias.alias8digit,
+              lipaNamba: existing.studentAlias.alias10digit,
             });
           }
           continue;
@@ -178,15 +370,15 @@ export class StudentAliasService {
             admissionNo: row.admissionNo,
             status: 'created',
             studentId: created.student.id,
-            lipaNamba: created.alias.alias8digit,
+            lipaNamba: created.alias.alias10digit,
           });
         } else {
           results.push({
             row: row.row,
             admissionNo: row.admissionNo,
             status: 'created',
-            studentId: created.id,
-            lipaNamba: created.studentAlias?.alias8digit,
+            studentId: (created as { id: string }).id,
+            lipaNamba: (created as { studentAlias?: { alias10digit?: string } }).studentAlias?.alias10digit,
           });
         }
       } catch (err) {
@@ -208,6 +400,8 @@ export class StudentAliasService {
     };
   }
 
+  // ── Helpers ───────────────────────────────────────────────────────────────
+
   private async reactivateStudent(studentId: string, actorId?: string) {
     const student = await this.prisma.student.findUniqueOrThrow({
       where: { id: studentId },
@@ -219,7 +413,7 @@ export class StudentAliasService {
 
     await this.prisma.student.update({
       where: { id: studentId },
-      data: { isActive: true, updatedAt: new Date() },
+      data: { isActive: true, status: 'ACTIVE', updatedAt: new Date() },
     });
     await this.prisma.studentAlias.update({
       where: { studentId },
@@ -232,32 +426,14 @@ export class StudentAliasService {
     });
   }
 
-  private async issueStudentAlias(
+  async issueStudentAlias(
     tx: Tx,
     merchantId: string,
     studentId: string,
     actorId?: string,
   ) {
-    const schoolSeq = await tx.schoolSequence.findUnique({
-      where: { merchantId },
-    });
-    if (!schoolSeq) {
-      throw new BadRequestException(
-        'School sequence not assigned — complete school onboarding approval first',
-      );
-    }
-
-    const updatedSeq = await tx.schoolSequence.update({
-      where: { merchantId },
-      data: { lastStudentSeq: { increment: 1 } },
-    });
-    const studentSeq4 = updatedSeq.lastStudentSeq.toString().padStart(4, '0');
-
-    const generated = await this.aliases.generatePublicAlias(SCHOOL_ALIAS_BLOCKS, tx);
-    const internalId8digit = buildEightDigitId(
-      schoolSeq.schoolSeq3,
-      studentSeq4,
-    );
+    const { alias10digit, acquirerCode3, aliasSeq6 } =
+      await this.aliases.generateStudentAlias(tx);
 
     const merchant = await tx.merchant.findUniqueOrThrow({
       where: { id: merchantId },
@@ -287,30 +463,29 @@ export class StudentAliasService {
       tx,
     );
 
-    const qr = await this.qr.createStaticQr({
-      merchantId,
-      studentId,
-      merchantName: merchant.tradingName,
-      city: merchant.profile.city,
-      postalCode: merchant.profile.postalCode,
-      mcc: merchant.mcc,
-      merchantId15,
-      storeLabel: generated.alias8digit,
-      acquirerId5,
-      internalRoutingId: internalId8digit,
-      createdBy: actorId,
-    }, tx);
+    const qr = await this.qr.createStaticQr(
+      {
+        merchantId,
+        studentId,
+        merchantName: merchant.tradingName,
+        city: merchant.profile.city,
+        postalCode: merchant.profile.postalCode,
+        mcc: merchant.mcc,
+        merchantId15,
+        storeLabel: alias10digit,
+        acquirerId5,
+        createdBy: actorId,
+      },
+      tx,
+    );
 
     return tx.studentAlias.create({
       data: {
         studentId,
         merchantId,
-        alias8digit: generated.alias8digit,
-        internalId8digit,
-        acquirerCode3: generated.acquirerCode3,
-        aliasSeq4: generated.aliasSeq4,
-        schoolSeq3: schoolSeq.schoolSeq3,
-        studentSeq4,
+        alias10digit,
+        acquirerCode3,
+        aliasSeq6,
         qrCodeId: qr.id,
       },
     });

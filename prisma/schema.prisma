@@ -107,6 +107,14 @@ enum DocumentVerificationStatus {
   @@map("document_verification_status")
 }
 
+enum StudentStatus {
+  ACTIVE
+  SUSPENDED
+  INACTIVE
+
+  @@map("student_status")
+}
+
 enum IntegrationType {
   TPS
   CFS
@@ -971,6 +979,15 @@ model GlobalAliasSequence {
   @@map("global_alias_sequences")
 }
 
+/// Flat global sequence for 10-digit student aliases ([780][seq6][check1]).
+/// A single GLOBAL row; the atomic UPDATE caps at 999,999.
+model StudentAliasSequence {
+  id      String @id @db.VarChar(6)
+  lastSeq Int    @default(0) @map("last_seq")
+
+  @@map("student_alias_sequences")
+}
+
 /// Per-block sequence for the 8-digit Lipa Namba alias (AAA-CCCC-S). One row
 /// per allocated 3-digit acquirer block (780/781/782); allocation tries blocks
 /// in order and rolls over once a block's 4-digit space (0000-9999) is used up.
@@ -1024,16 +1041,18 @@ model SchoolSequence {
 }
 
 model Student {
-  id            String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  merchantId    String    @map("merchant_id") @db.Uuid
-  admissionNo   String    @map("admission_no") @db.VarChar(30)
-  fullName      String    @map("full_name") @db.VarChar(255)
-  guardianPhone String?   @map("guardian_phone") @db.VarChar(20)
-  isActive      Boolean   @default(true) @map("is_active")
-  createdAt     DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
-  updatedAt     DateTime  @default(now()) @updatedAt @map("updated_at") @db.Timestamptz(6)
-  deletedAt     DateTime? @map("deleted_at") @db.Timestamptz(6)
-  deletedBy     String?   @map("deleted_by") @db.Uuid
+  id            String        @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  merchantId    String        @map("merchant_id") @db.Uuid
+  admissionNo   String        @map("admission_no") @db.VarChar(30)
+  fullName      String        @map("full_name") @db.VarChar(255)
+  guardianPhone String?       @map("guardian_phone") @db.VarChar(20)
+  parentEmail   String?       @map("parent_email") @db.Citext
+  status        StudentStatus @default(ACTIVE) @map("status")
+  isActive      Boolean       @default(true) @map("is_active")
+  createdAt     DateTime      @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt     DateTime      @default(now()) @updatedAt @map("updated_at") @db.Timestamptz(6)
+  deletedAt     DateTime?     @map("deleted_at") @db.Timestamptz(6)
+  deletedBy     String?       @map("deleted_by") @db.Uuid
 
   merchant     Merchant      @relation(fields: [merchantId], references: [id], onDelete: Cascade)
   studentAlias StudentAlias?
@@ -1045,20 +1064,20 @@ model Student {
 }
 
 model StudentAlias {
-  id               String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  studentId        String   @unique @map("student_id") @db.Uuid
-  merchantId       String   @map("merchant_id") @db.Uuid
-  alias8digit      String   @unique @map("alias_8digit") @db.Char(8)
-  internalId8digit String   @unique @map("internal_id_8digit") @db.Char(8)
-  acquirerCode3    String   @map("acquirer_code_3") @db.Char(3)
-  aliasSeq4        String   @map("alias_seq_4") @db.Char(4)
-  schoolSeq3       String   @map("school_seq_3") @db.Char(3)
-  studentSeq4      String   @map("student_seq_4") @db.Char(4)
-  tipsRegistered   Boolean  @default(false) @map("tips_registered")
-  isActive         Boolean  @default(true) @map("is_active")
-  qrCodeId         String?  @map("qr_code_id") @db.Uuid
-  createdAt        DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
-  updatedAt        DateTime @default(now()) @updatedAt @map("updated_at") @db.Timestamptz(6)
+  id            String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  studentId     String   @unique @map("student_id") @db.Uuid
+  merchantId    String   @map("merchant_id") @db.Uuid
+  /// 10-digit public alias: [780][globalSeq6][DammCheck1]
+  alias10digit  String   @unique @map("alias_10digit") @db.Char(10)
+  /// Always '780' — stored for structural parity with MerchantAlias.
+  acquirerCode3 String   @map("acquirer_code_3") @db.Char(3)
+  /// 6-digit zero-padded slot from the flat global student alias sequence.
+  aliasSeq6     String   @map("alias_seq_6") @db.Char(6)
+  tipsRegistered Boolean @default(false) @map("tips_registered")
+  isActive      Boolean  @default(true) @map("is_active")
+  qrCodeId      String?  @map("qr_code_id") @db.Uuid
+  createdAt     DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt     DateTime @default(now()) @updatedAt @map("updated_at") @db.Timestamptz(6)
 
   student  Student  @relation(fields: [studentId], references: [id], onDelete: Cascade)
   merchant Merchant @relation(fields: [merchantId], references: [id], onDelete: Cascade)
@@ -1125,8 +1144,8 @@ model QrPayloadVersion {
   tlvPayload      String   @map("tlv_payload") @db.Text
   crcValue        String   @map("crc_value") @db.Char(4)
   tag26MerchantId String?  @map("tag_26_02_merchant_id") @db.VarChar(15)
-  tag62StoreLabel String?  @map("tag_62_03_store_label") @db.VarChar(8)
-  tag62InternalId String?  @map("tag_62_05_internal_id") @db.VarChar(8)
+  tag62StoreLabel String?  @map("tag_62_03_store_label") @db.VarChar(25)
+  tag62InternalId String?  @map("tag_62_05_internal_id") @db.VarChar(25)
   tag62TerminalLabel String? @map("tag_62_07_terminal_label") @db.VarChar(25)
   amount          Decimal? @db.Decimal(18, 2)
   billNumber      String?  @map("bill_number") @db.VarChar(25)

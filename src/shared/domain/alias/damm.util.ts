@@ -1,4 +1,3 @@
-/** Damm (Luhn mod 10 variant) check digit for 8-digit Lipa Namba / internal IDs. */
 const DAMM_TABLE: number[][] = [
   [0, 1, 2, 3, 4, 5, 6, 7, 8, 9],
   [1, 2, 3, 4, 0, 6, 7, 8, 9, 5],
@@ -23,6 +22,7 @@ export function dammCheckDigit(digits: number[]): number {
   return 0;
 }
 
+/** Build an 8-digit merchant/school Lipa Namba alias: [block3][seq4][check1]. */
 export function buildEightDigitId(prefix: string, sequence: string): string {
   const body = `${prefix}${sequence}`.padStart(7, '0').slice(-7);
   const digits = body.split('').map((c) => parseInt(c, 10));
@@ -30,9 +30,28 @@ export function buildEightDigitId(prefix: string, sequence: string): string {
   return `${body}${check}`;
 }
 
-export function validateDamm(id8: string): boolean {
-  if (!/^\d{8}$/.test(id8)) return false;
-  const digits = id8.slice(0, 7).split('').map((c) => parseInt(c, 10));
+/**
+ * Build a 10-digit student alias: [780][globalSeq6][check1].
+ * The body is always the 9-digit string "780" + the 6-digit padded sequence;
+ * the Damm check digit is computed over all 9 body digits.
+ */
+export function buildTenDigitId(globalSeq6: string): string {
+  const padded = globalSeq6.padStart(6, '0').slice(-6);
+  const body = `780${padded}`; // 9 digits
+  const digits = body.split('').map((c) => parseInt(c, 10));
+  const check = dammCheckDigit(digits);
+  return `${body}${check}`; // 10 digits
+}
+
+/**
+ * Validate a Damm-protected numeric ID of any length (8-digit merchant aliases
+ * and 10-digit student aliases both pass through here).
+ * The last character is the check digit; all preceding characters form the body.
+ */
+export function validateDamm(id: string): boolean {
+  if (!/^\d+$/.test(id) || id.length < 2) return false;
+  const body = id.slice(0, -1);
+  const digits = body.split('').map((c) => parseInt(c, 10));
   const expected = dammCheckDigit(digits);
-  return parseInt(id8[7], 10) === expected;
+  return parseInt(id[id.length - 1], 10) === expected;
 }

@@ -94,13 +94,13 @@ export class MerchantAliasService {
     return alias;
   }
 
-  async lookupAlias(alias8digit: string) {
-    const result = await this.aliases.findByAlias8(alias8digit);
+  async lookupAlias(alias: string) {
+    const result = await this.aliases.findByAlias(alias);
     if (!result) throw new NotFoundException('Alias not found');
     return result;
   }
 
-  validateAlias(alias8digit: string) {
-    return { valid: this.aliases.validateAlias(alias8digit) };
+  validateAlias(alias: string) {
+    return { valid: this.aliases.validateAlias(alias) };
   }
 }

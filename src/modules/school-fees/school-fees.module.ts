@@ -6,12 +6,14 @@ import { AliasModule } from '@modules/alias/alias.module';
 import { QrModule } from '@modules/qr/qr.module';
 import { MakerCheckerModule } from '@modules/maker-checker/maker-checker.module';
 import { SCHOOL_ONBOARDING_COMPLETION_PORT } from '@modules/maker-checker/application/ports/school-onboarding-completion.port';
+import { QrPosterModule } from '@shared/qr-poster/qr-poster.module';
 import { SchoolsController } from './presentation/http/schools.controller';
 import { StudentsController } from './presentation/http/students.controller';
 import { SchoolsRepository } from './infrastructure/persistence/schools.repository';
 import { StudentAliasService } from './application/services/student-alias.service';
 import { BulkStudentUploadService } from './application/services/bulk-student-upload.service';
 import { SchoolIssuanceService } from './application/services/school-issuance.service';
+import { StudentAliasConsumer } from './application/handlers/student-alias.consumer';
 
 @Module({
   imports: [
@@ -20,6 +22,7 @@ import { SchoolIssuanceService } from './application/services/school-issuance.se
     MerchantOnboardingModule,
     AliasModule,
     QrModule,
+    QrPosterModule,
     forwardRef(() => MakerCheckerModule),
   ],
   controllers: [SchoolsController, StudentsController],
@@ -28,6 +31,7 @@ import { SchoolIssuanceService } from './application/services/school-issuance.se
     StudentAliasService,
     BulkStudentUploadService,
     SchoolIssuanceService,
+    StudentAliasConsumer,
     {
       provide: SCHOOL_ONBOARDING_COMPLETION_PORT,
       useExisting: SchoolIssuanceService,
