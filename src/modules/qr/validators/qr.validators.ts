@@ -6,6 +6,7 @@ import {
 import { MerchantStatus, Prisma, QrType } from '@prisma/client';
 import { PrismaService } from '@infrastructure/database/prisma/prisma.service';
 import { TipsMerchantIdRepository } from '../domain/tips-merchant-id.repository';
+import { VALID_LIPA_NAMBA_BLOCKS } from '@shared/domain/alias/alias.constants';
 
 const ANS_PATTERN = /^[A-Za-z0-9 .,\-]*$/;
 
@@ -225,6 +226,23 @@ export class QrValidators {
     if (!aliasRow?.isActive || !aliasRow.alias8digit) {
       throw new BadRequestException(
         'Active merchant alias / Lipa Namba is required before QR generation',
+      );
+    }
+
+    const aliasBlock = aliasRow.alias8digit.slice(0, 3);
+    if (!(VALID_LIPA_NAMBA_BLOCKS as readonly string[]).includes(aliasBlock)) {
+      throw new BadRequestException(
+        'Merchant Lipa Namba must start with block 780 (school), 781, or 782',
+      );
+    }
+    if (merchant.isSchool && aliasBlock !== '780') {
+      throw new BadRequestException(
+        'School merchants must use Lipa Namba block 780',
+      );
+    }
+    if (!merchant.isSchool && aliasBlock === '780') {
+      throw new BadRequestException(
+        'Non-school merchants must use Lipa Namba block 781 or 782',
       );
     }
 

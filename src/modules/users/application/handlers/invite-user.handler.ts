@@ -42,12 +42,17 @@ export class InviteUserHandler
     );
     this.scope.assertCanAssignRoles(command.actor, [role.code], scope.merchantId);
 
-    const existing = await this.users.findByEmail(
+    const existing = await this.users.findByEmailIncludingDeleted(
       command.actor.acquirerId,
       command.email,
     );
-    if (existing) {
+    if (existing && !existing.deletedAt) {
       throw new UserConflictException('A user with this email already exists');
+    }
+    if (existing?.deletedAt) {
+      throw new UserConflictException(
+        'A deactivated user with this email already exists. Create the user again from Users to reactivate them.',
+      );
     }
 
     const rawToken = randomBytes(32).toString('base64url');

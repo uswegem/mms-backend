@@ -6,9 +6,14 @@ import {
   buildTenDigitId,
   validateDamm,
 } from '@shared/domain/alias/damm.util';
-import { AliasBlock } from '@shared/domain/alias/alias.constants';
+import {
+  LIPA_NAMBA_BLOCKS,
+  type LipaNambaBlock,
+} from '@shared/domain/alias/alias.constants';
 
 type Tx = Prisma.TransactionClient;
+
+const MAX_SEQ4 = 9999;
 
 export class StudentAliasCapacityExceededException extends Error {
   constructor() {
@@ -23,42 +28,43 @@ export class StudentAliasCapacityExceededException extends Error {
 export class AliasRepository {
   constructor(private readonly prisma: PrismaService) {}
 
-  /**
-   * Atomically claims the next 4-digit sequence slot within one of the given
-   * blocks, trying them in the order passed and rolling over once a block's
-   * 0000-9999 space is used up. Used for 8-digit merchant/school aliases only.
-   */
-  async allocateAliasSlot(
-    blocks: readonly AliasBlock[],
-    tx?: Tx,
-  ): Promise<{ block: string; seq4: string }> {
+  async nextSeq4ForBlock(block: LipaNambaBlock, tx?: Tx): Promise<string> {
     const client = tx ?? this.prisma;
-    for (const block of blocks) {
-      const rows = await client.$queryRaw<{ last_seq: number }[]>`
-        UPDATE alias_block_sequences
-        SET last_seq = last_seq + 1
-        WHERE block = ${block} AND last_seq < 9999
-        RETURNING last_seq
-      `;
-      if (rows.length > 0) {
-        return { block, seq4: rows[0].last_seq.toString().padStart(4, '0') };
-      }
+    const row = await client.globalAliasSequence.upsert({
+      where: { id: `BLOCK_${block}` },
+      update: { lastSeq: { increment: 1 } },
+      create: { id: `BLOCK_${block}`, lastSeq: 1 },
+    });
+    if (row.lastSeq > MAX_SEQ4) {
+      throw new Error(`Lipa Namba block ${block} sequence exhausted`);
     }
-    throw new Error(
-      `All allowed TANQR alias blocks (${blocks.join('/')}) are exhausted — provision a new block`,
-    );
+    return row.lastSeq.toString().padStart(4, '0');
+  }
+
+  /**
+   * Prefer 781 for merchants; when 781 is full, use 782.
+   */
+  async resolveMerchantBlock(tx?: Tx): Promise<LipaNambaBlock> {
+    const client = tx ?? this.prisma;
+    const primary = await client.globalAliasSequence.findUnique({
+      where: { id: `BLOCK_${LIPA_NAMBA_BLOCKS.MERCHANT_PRIMARY}` },
+    });
+    if (!primary || primary.lastSeq < MAX_SEQ4) {
+      return LIPA_NAMBA_BLOCKS.MERCHANT_PRIMARY;
+    }
+    return LIPA_NAMBA_BLOCKS.MERCHANT_SECONDARY;
   }
 
   async generatePublicAlias(
-    blocks: readonly AliasBlock[],
     tx?: Tx,
+    block: LipaNambaBlock = LIPA_NAMBA_BLOCKS.SCHOOL,
   ): Promise<{
     alias8digit: string;
     acquirerCode3: string;
     aliasSeq4: string;
     checksum1: string;
   }> {
-    const { block, seq4 } = await this.allocateAliasSlot(blocks, tx);
+    const seq4 = await this.nextSeq4ForBlock(block, tx);
     const alias8digit = buildEightDigitId(block, seq4);
     return {
       alias8digit,

@@ -2,10 +2,7 @@ import { Injectable, NotFoundException } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
 import { PrismaService } from '@infrastructure/database/prisma/prisma.service';
 import { buildEightDigitId } from '@shared/domain/alias/damm.util';
-import {
-  MERCHANT_ALIAS_BLOCKS,
-  SCHOOL_ALIAS_BLOCKS,
-} from '@shared/domain/alias/alias.constants';
+import { LIPA_NAMBA_BLOCKS } from '@shared/domain/alias/alias.constants';
 import { AliasRepository } from '@modules/alias/infrastructure/persistence/alias.repository';
 
 type Tx = Prisma.TransactionClient;
@@ -17,8 +14,8 @@ export class MerchantAliasService {
     private readonly aliases: AliasRepository,
   ) {}
 
-  /** Issues a Lipa Namba alias from block 780, reserved for schools/students. */
-  async issueSchoolAlias(merchantId: string) {
+  /** Issue Lipa Namba: 780 for schools, 781/782 for other merchants. */
+  async issueMerchantAlias(merchantId: string) {
     const existing = await this.aliases.findMerchantAlias(merchantId);
     if (existing) {
       const schoolSeq = await this.prisma.schoolSequence.findUnique({
@@ -32,7 +29,10 @@ export class MerchantAliasService {
     });
 
     return this.prisma.$transaction(async (tx) => {
-      const generated = await this.aliases.generatePublicAlias(SCHOOL_ALIAS_BLOCKS, tx);
+      const block = merchant.isSchool
+        ? LIPA_NAMBA_BLOCKS.SCHOOL
+        : await this.aliases.resolveMerchantBlock(tx);
+      const generated = await this.aliases.generatePublicAlias(tx, block);
       const alias = await tx.merchantAlias.create({
         data: {
           merchantId,
@@ -40,39 +40,24 @@ export class MerchantAliasService {
           acquirerCode3: generated.acquirerCode3,
           merchantCode4: generated.aliasSeq4,
           checksum1: generated.checksum1,
-          isSchool: true,
+          isSchool: merchant.isSchool,
         },
       });
 
-      const schoolSeq = await this.ensureSchoolSequence(tx, merchantId, merchant.acquirerId);
-      const internalId = buildEightDigitId(schoolSeq.schoolSeq3, '0000');
+      let schoolSeq = null;
+      let internalId: string | undefined;
+      if (merchant.isSchool) {
+        schoolSeq = await this.ensureSchoolSequence(tx, merchantId, merchant.acquirerId);
+        internalId = buildEightDigitId(schoolSeq.schoolSeq3, '0000');
+      }
 
       return { alias, schoolSeq, internalId };
     });
   }
 
-  /** Issues a Lipa Namba alias from blocks 781/782, reserved for retail merchants. */
-  async issueMerchantAlias(merchantId: string) {
-    const existing = await this.aliases.findMerchantAlias(merchantId);
-    if (existing) {
-      return { alias: existing, schoolSeq: null };
-    }
-
-    return this.prisma.$transaction(async (tx) => {
-      const generated = await this.aliases.generatePublicAlias(MERCHANT_ALIAS_BLOCKS, tx);
-      const alias = await tx.merchantAlias.create({
-        data: {
-          merchantId,
-          alias8digit: generated.alias8digit,
-          acquirerCode3: generated.acquirerCode3,
-          merchantCode4: generated.aliasSeq4,
-          checksum1: generated.checksum1,
-          isSchool: false,
-        },
-      });
-
-      return { alias, schoolSeq: null };
-    });
+  /** @deprecated Use issueMerchantAlias — school sequences are only created when isSchool. */
+  async issueSchoolMerchantAlias(merchantId: string) {
+    return this.issueMerchantAlias(merchantId);
   }
 
   private async ensureSchoolSequence(tx: Tx, merchantId: string, acquirerId: string) {

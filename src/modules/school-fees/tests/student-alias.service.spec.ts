@@ -72,6 +72,8 @@ describe('StudentAliasService', () => {
         .fn()
         .mockResolvedValue({ merchantId15: '044000000000001' }),
     };
+    const amqp = { publish: jest.fn() };
+    const config = { get: jest.fn().mockReturnValue(undefined) };
 
     const service = new StudentAliasService(
       prisma as never,
@@ -79,6 +81,8 @@ describe('StudentAliasService', () => {
       qr as never,
       qrValidators as never,
       new IdempotencyService(redis as never),
+      amqp as never,
+      config as never,
     );
 
     return { service, prisma, tx, aliases, qr, qrValidators };

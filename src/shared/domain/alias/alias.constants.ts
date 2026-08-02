@@ -1,10 +1,24 @@
-/** All acquirer alias blocks that exist. */
-export const ALIAS_BLOCKS = ['780', '781', '782'] as const;
+/** Acquirer Lipa Namba blocks assigned to this FSP. */
+export const LIPA_NAMBA_BLOCKS = {
+  /** Schools and school-linked student public IDs */
+  SCHOOL: '780',
+  /** Primary block for retail / non-school merchants */
+  MERCHANT_PRIMARY: '781',
+  /** Overflow block for retail / non-school merchants */
+  MERCHANT_SECONDARY: '782',
+} as const;
 
-export type AliasBlock = (typeof ALIAS_BLOCKS)[number];
+export type LipaNambaBlock =
+  (typeof LIPA_NAMBA_BLOCKS)[keyof typeof LIPA_NAMBA_BLOCKS];
 
-/** Block reserved exclusively for schools/students — never issued to a retail merchant. */
-export const SCHOOL_ALIAS_BLOCKS: readonly AliasBlock[] = ['780'];
+export const VALID_LIPA_NAMBA_BLOCKS: readonly LipaNambaBlock[] = [
+  LIPA_NAMBA_BLOCKS.SCHOOL,
+  LIPA_NAMBA_BLOCKS.MERCHANT_PRIMARY,
+  LIPA_NAMBA_BLOCKS.MERCHANT_SECONDARY,
+];
 
-/** Blocks for retail merchants, tried in order (781 fills before 782 is touched) — never issued to a school/student. */
-export const MERCHANT_ALIAS_BLOCKS: readonly AliasBlock[] = ['781', '782'];
+/** @deprecated Prefer LIPA_NAMBA_BLOCKS.SCHOOL — kept for older call sites. */
+export const LIPA_NAMBA_PREFIX = LIPA_NAMBA_BLOCKS.SCHOOL;
+
+/** TIPS Acquirer ID (tag 26/01) for this FSP. */
+export const DEFAULT_TIPS_ACQUIRER_ID5 = '01044';

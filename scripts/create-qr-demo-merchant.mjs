@@ -58,9 +58,9 @@ async function main() {
 
   await prisma.acquirer.update({
     where: { id: acquirer.id },
-    data: { tipsAcquirerId5: '01001' },
+    data: { tipsAcquirerId5: '01044' },
   });
-  console.log('✓ DEMO acquirer tipsAcquirerId5 = 01001');
+  console.log('✓ DEMO acquirer tipsAcquirerId5 = 01044');
 
   const admin = await prisma.user.findFirst({
     where: { email: 'admin@mms.local', deletedAt: null },
@@ -149,8 +149,8 @@ async function main() {
     console.log('✓ Updated existing merchant to ACTIVE / QR-ready');
   }
 
-  const acquirerCode3 = '001';
-  const merchantCode4 = '1234';
+  const acquirerCode3 = '781';
+  const merchantCode4 = '0001';
   const alias8 = buildEightDigitId(acquirerCode3, merchantCode4);
   const checksum1 = alias8.slice(-1);
 
@@ -167,11 +167,24 @@ async function main() {
     });
     console.log(`✓ Issued Lipa Namba alias ${alias8}`);
   } else {
+    const badBlock = !['781', '782'].includes(merchant.merchantAlias.acquirerCode3);
     await prisma.merchantAlias.update({
       where: { id: merchant.merchantAlias.id },
-      data: { isActive: true },
+      data: badBlock
+        ? {
+            alias8digit: alias8,
+            acquirerCode3,
+            merchantCode4,
+            checksum1,
+            isActive: true,
+          }
+        : { isActive: true },
     });
-    console.log(`✓ Alias active: ${merchant.merchantAlias.alias8digit}`);
+    console.log(
+      badBlock
+        ? `✓ Corrected Lipa Namba alias to ${alias8}`
+        : `✓ Alias active: ${merchant.merchantAlias.alias8digit}`,
+    );
   }
 
   await prisma.tipsRegistration.upsert({
@@ -179,19 +192,19 @@ async function main() {
     create: {
       merchantId: merchant.id,
       domainName: 'tz.go.bot.tips',
-      acquirerId5: '01001',
-      merchantId15: '12345678',
+      acquirerId5: '01044',
+      merchantId15: alias8.padStart(15, '0'),
       status: 'REGISTERED',
       registeredAt: new Date(),
     },
     update: {
-      acquirerId5: '01001',
-      merchantId15: '12345678',
+      acquirerId5: '01044',
+      merchantId15: alias8.padStart(15, '0'),
       status: 'REGISTERED',
       registeredAt: new Date(),
     },
   });
-  console.log('✓ TipsRegistration REGISTERED (acquirer 01001)');
+  console.log('✓ TipsRegistration REGISTERED (acquirer 01044)');
 
   const token = await login();
   console.log('✓ Logged in as admin@mms.local');

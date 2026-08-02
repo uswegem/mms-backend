@@ -182,8 +182,8 @@ describe('dynamic TANQR sample', () => {
   it('builds dynamic payload with amount tag 54', () => {
     const { tlvPayload, crcValue } = buildTanqrPayload({
       poiMethod: '12',
-      acquirerId5: '01001',
-      merchantId: '12345678',
+      acquirerId5: '01044',
+      merchantId: '78100019',
       mcc: '5814',
       merchantName: 'YN RESTAURANTS',
       city: 'DODOMA',
@@ -196,6 +196,8 @@ describe('dynamic TANQR sample', () => {
     });
 
     expect(tlvPayload).toContain('010212');
+    expect(tlvPayload).toContain('010501044');
+    expect(tlvPayload).toContain('020878100019');
     expect(tlvPayload).toContain('54072000.00');
     expect(verifyTanqrPayload(tlvPayload).valid).toBe(true);
     expect(crcValue).toHaveLength(4);

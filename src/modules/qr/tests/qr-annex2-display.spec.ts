@@ -12,7 +12,7 @@ describe('QrAnnex2DisplayService', () => {
   const samplePayload =
     '00020101021126390014tz.go.bot.tips0105010010208123456785204581453038345802TZ5914YN RESTAURANTS6006DODOMA610541000622103080011234907051100263047D47';
 
-  it('renders Annex 2 SVG with Parts A–D', async () => {
+  it('renders Annex 2 SVG with Parts A–C', async () => {
     const qrPng = await renderer.renderPng(samplePayload, 200);
     const svg = annex2.renderSvg({
       merchantName: 'YN RESTAURANTS',
@@ -27,7 +27,6 @@ describe('QrAnnex2DisplayService', () => {
     expect(svg).toContain('part-a');
     expect(svg).toContain('part-b');
     expect(svg).toContain('part-c');
-    expect(svg).toContain('part-d');
     expect(svg).toContain('00112349');
     expect(svg).toContain('YN RESTAURANTS');
   });

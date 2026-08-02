@@ -12,7 +12,7 @@ export class ValidateQrPayloadDto {
   @IsIn(['11', '12'])
   poi_method?: '11' | '12';
 
-  @ApiPropertyOptional({ example: '01001' })
+  @ApiPropertyOptional({ example: '01044' })
   @IsOptional()
   @IsString()
   acquirer_id5?: string;

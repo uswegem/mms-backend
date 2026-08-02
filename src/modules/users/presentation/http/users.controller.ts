@@ -96,6 +96,7 @@ export class UsersController {
         dto.roleIds,
         dto.merchantId,
         dto.phone,
+        dto.password,
       ),
     );
   }
