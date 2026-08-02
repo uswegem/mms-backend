@@ -130,6 +130,7 @@ const ROLES: Array<{
       'onboarding:submit',
       'approval:task:read',
       'school:read',
+      'school:onboarding',
       'transactions:read',
     ],
   },
