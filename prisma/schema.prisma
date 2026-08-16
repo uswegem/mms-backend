@@ -178,6 +178,7 @@ enum ApprovalEntityType {
   FEE_RULE
   MERCHANT_LIMIT
   CONFIG_CHANGE
+  RECON_EXCEPTION
 
   @@map("approval_entity_type")
 }
@@ -209,6 +210,198 @@ enum PaymentChannel {
   OTHER
 
   @@map("payment_channel")
+}
+
+enum StudentStatus {
+  ACTIVE
+  TRANSFERRED
+  GRADUATED
+  SUSPENDED
+
+  @@map("student_status")
+}
+
+enum FeeStructureStatus {
+  DRAFT
+  PUBLISHED
+  ARCHIVED
+
+  @@map("fee_structure_status")
+}
+
+enum FeeInvoiceStatus {
+  UNPAID
+  PARTIALLY_PAID
+  PAID
+  CANCELLED
+
+  @@map("fee_invoice_status")
+}
+
+enum FeeAdjustmentType {
+  DISCOUNT
+  WAIVER
+  SCHOLARSHIP
+
+  @@map("fee_adjustment_type")
+}
+
+enum FeePaymentRecordStatus {
+  INITIATED
+  PENDING
+  COMPLETED
+  FAILED
+  REVERSED
+  DISPUTED
+  DUPLICATE_IGNORED
+
+  @@map("fee_payment_record_status")
+}
+
+enum FeePaymentChannel {
+  QR
+  LIPA_NAMBA
+  USSD
+  API
+  MOCK
+  BANK_BRANCH
+  MOBILE_MONEY
+  OTHER
+
+  @@map("fee_payment_channel")
+}
+
+enum FeeReferenceType {
+  INVOICE
+  STUDENT
+
+  @@map("fee_reference_type")
+}
+
+enum FeeAllocationRule {
+  OLDEST_DUE_FIRST
+  NEWEST_DUE_FIRST
+
+  @@map("fee_allocation_rule")
+}
+
+enum ReferenceLookupOutcome {
+  SUCCESS
+  SETTLED
+  INVALID_FORMAT
+  BAD_CHECK_DIGIT
+  NOT_FOUND
+  CANCELLED
+  SCHOOL_SUSPENDED
+  SCHOOL_INACTIVE
+  NO_OPEN_BALANCE
+
+  @@map("reference_lookup_outcome")
+}
+
+enum ExternalSettlementSource {
+  TIPS
+  CBS
+
+  @@map("external_settlement_source")
+}
+
+enum ReconciliationRunStatus {
+  RUNNING
+  COMPLETED
+  FAILED
+
+  @@map("reconciliation_run_status")
+}
+
+enum ReconciliationClassification {
+  MATCHED
+  MATCHED_WITH_VARIANCE
+  AMOUNT_MISMATCH
+  DUPLICATE_EXTERNAL
+  UNMATCHED_EXTERNAL
+  UNMATCHED_INTERNAL
+  DATE_VARIANCE_REVIEW
+  REFERENCE_INVALID
+  MISSING_CBS_LEG
+  MISSING_TIPS_LEG
+  MMS_MISSING
+  CROSS_LEG_AMOUNT_CONFLICT
+  BULK_SUM_MISMATCH
+  ORPHAN_CBS
+  ORPHAN_TIPS
+
+  @@map("reconciliation_classification")
+}
+
+enum ReconciliationMatchRule {
+  EXACT_TXN_ID
+  REF_AMOUNT_DATE_WINDOW
+  REF_AMOUNT_DATE_VARIANCE
+  REF_AMOUNT_MISMATCH
+  TIPS_TO_MMS
+  CBS_TO_TIPS
+  CBS_TO_MMS
+  MANUAL
+  BULK_CBS_SUM
+  NONE
+
+  @@map("reconciliation_match_rule")
+}
+
+enum MatchGroupStatus {
+  FULLY_MATCHED
+  MMS_TIPS_ONLY
+  MMS_CBS_ONLY
+  TIPS_CBS_ONLY
+  MMS_ONLY
+  TIPS_ONLY
+  CBS_ONLY
+  CONFLICT
+
+  @@map("match_group_status")
+}
+
+enum MatchGroupLegType {
+  MMS
+  TIPS
+  CBS
+
+  @@map("match_group_leg_type")
+}
+
+enum ExceptionCaseStatus {
+  OPEN
+  UNDER_INVESTIGATION
+  PENDING_APPROVAL
+  RESOLVED
+  ESCALATED
+  CLOSED
+  AUTO_CLOSED
+
+  @@map("exception_case_status")
+}
+
+enum ExceptionSeverity {
+  LOW
+  MEDIUM
+  HIGH
+  CRITICAL
+
+  @@map("exception_severity")
+}
+
+enum ExceptionResolutionAction {
+  MANUAL_MATCH
+  FORCE_CREATE_PAYMENT
+  BANK_SIDE_ERROR
+  REVERSE_PAYMENT
+  WRITE_OFF
+  ESCALATE
+  APPROVE
+  REJECT
+
+  @@map("exception_resolution_action")
 }
 
 enum QrType {
@@ -492,6 +685,21 @@ model Merchant {
   students             Student[]
   studentAliases       StudentAlias[]
   qrCodes              QrCode[]
+  academicYears        AcademicYear[]
+  classLevels          ClassLevel[]
+  feeStructures        FeeStructure[]
+  feeInvoices          FeeInvoice[]
+  feePayments          FeePayment[]
+  studentCredits       StudentAccountCredit[]
+  feeInvoiceSequences  FeeInvoiceSequence?
+  schoolFeeSettings    SchoolFeeSettings?
+  referenceLookupLogs  ReferenceLookupLog[]
+  dailyCollectionSnapshots SchoolDailyCollectionSnapshot[]
+  feePaymentReversals  FeePaymentReversal[]
+  reconciliationMatches ReconciliationMatch[]
+  reconciliationMatchGroups ReconciliationMatchGroup[]
+  reconciliationExceptionCases ReconciliationExceptionCase[]
+  reconciliationWriteOffs ReconciliationWriteOff[]
   tipsRegistration     TipsRegistration?
   riskReviews          MerchantRiskReview[]
   integrations         MerchantIntegration[]
@@ -994,24 +1202,652 @@ model SchoolSequence {
 }
 
 model Student {
-  id            String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  merchantId    String    @map("merchant_id") @db.Uuid
-  admissionNo   String    @map("admission_no") @db.VarChar(30)
-  fullName      String    @map("full_name") @db.VarChar(255)
-  guardianPhone String?   @map("guardian_phone") @db.VarChar(20)
-  isActive      Boolean   @default(true) @map("is_active")
-  createdAt     DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
-  updatedAt     DateTime  @default(now()) @updatedAt @map("updated_at") @db.Timestamptz(6)
-  deletedAt     DateTime? @map("deleted_at") @db.Timestamptz(6)
-  deletedBy     String?   @map("deleted_by") @db.Uuid
+  id            String        @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  merchantId    String        @map("merchant_id") @db.Uuid
+  admissionNo   String        @map("admission_no") @db.VarChar(30)
+  fullName      String        @map("full_name") @db.VarChar(255)
+  guardianName  String?       @map("guardian_name") @db.VarChar(255)
+  guardianPhone String?       @map("guardian_phone") @db.VarChar(20)
+  status        StudentStatus @default(ACTIVE)
+  isActive      Boolean       @default(true) @map("is_active")
+  createdAt     DateTime      @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt     DateTime      @default(now()) @updatedAt @map("updated_at") @db.Timestamptz(6)
+  deletedAt     DateTime?     @map("deleted_at") @db.Timestamptz(6)
+  deletedBy     String?       @map("deleted_by") @db.Uuid
 
-  merchant     Merchant      @relation(fields: [merchantId], references: [id], onDelete: Cascade)
+  merchant     Merchant               @relation(fields: [merchantId], references: [id], onDelete: Cascade)
   studentAlias StudentAlias?
   qrCodes      QrCode[]
+  enrollments  StudentEnrollment[]
+  invoices     FeeInvoice[]
+  credits      StudentAccountCredit[]
+  resolvedPayments FeePayment[] @relation("FeePaymentResolvedStudent")
 
   @@unique([merchantId, admissionNo])
   @@index([merchantId])
+  @@index([merchantId, status])
   @@map("students")
+}
+
+model AcademicYear {
+  id         String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  merchantId String    @map("merchant_id") @db.Uuid
+  name       String    @db.VarChar(50)
+  startsOn   DateTime? @map("starts_on") @db.Date
+  endsOn     DateTime? @map("ends_on") @db.Date
+  isCurrent  Boolean   @default(false) @map("is_current")
+  createdAt  DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt  DateTime  @default(now()) @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  merchant      Merchant             @relation(fields: [merchantId], references: [id], onDelete: Cascade)
+  terms         AcademicTerm[]
+  enrollments   StudentEnrollment[]
+  feeStructures FeeStructure[]
+
+  @@unique([merchantId, name])
+  @@index([merchantId])
+  @@map("academic_years")
+}
+
+model AcademicTerm {
+  id             String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  merchantId     String    @map("merchant_id") @db.Uuid
+  academicYearId String    @map("academic_year_id") @db.Uuid
+  name           String    @db.VarChar(50)
+  sequence       Int       @default(1)
+  startsOn       DateTime? @map("starts_on") @db.Date
+  endsOn         DateTime? @map("ends_on") @db.Date
+  createdAt      DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt      DateTime  @default(now()) @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  academicYear  AcademicYear   @relation(fields: [academicYearId], references: [id], onDelete: Cascade)
+  feeStructures FeeStructure[]
+  invoices      FeeInvoice[]
+
+  @@unique([academicYearId, name])
+  @@index([merchantId])
+  @@map("academic_terms")
+}
+
+model ClassLevel {
+  id         String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  merchantId String   @map("merchant_id") @db.Uuid
+  code       String   @db.VarChar(30)
+  name       String   @db.VarChar(100)
+  sortOrder  Int      @default(0) @map("sort_order")
+  isActive   Boolean  @default(true) @map("is_active")
+  createdAt  DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt  DateTime @default(now()) @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  merchant      Merchant             @relation(fields: [merchantId], references: [id], onDelete: Cascade)
+  enrollments   StudentEnrollment[]
+  feeStructures FeeStructure[]
+  invoices      FeeInvoice[]
+
+  @@unique([merchantId, code])
+  @@index([merchantId])
+  @@map("class_levels")
+}
+
+model StudentEnrollment {
+  id             String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  merchantId     String    @map("merchant_id") @db.Uuid
+  studentId      String    @map("student_id") @db.Uuid
+  academicYearId String    @map("academic_year_id") @db.Uuid
+  classLevelId   String    @map("class_level_id") @db.Uuid
+  isCurrent      Boolean   @default(true) @map("is_current")
+  enrolledAt     DateTime  @default(now()) @map("enrolled_at") @db.Timestamptz(6)
+  leftAt         DateTime? @map("left_at") @db.Timestamptz(6)
+  createdAt      DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt      DateTime  @default(now()) @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  student      Student      @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  academicYear AcademicYear @relation(fields: [academicYearId], references: [id], onDelete: Cascade)
+  classLevel   ClassLevel   @relation(fields: [classLevelId], references: [id], onDelete: Restrict)
+
+  @@unique([studentId, academicYearId])
+  @@index([merchantId, academicYearId, classLevelId])
+  @@map("student_enrollments")
+}
+
+model FeeStructure {
+  id             String             @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  merchantId     String             @map("merchant_id") @db.Uuid
+  academicYearId String             @map("academic_year_id") @db.Uuid
+  academicTermId String             @map("academic_term_id") @db.Uuid
+  classLevelId   String             @map("class_level_id") @db.Uuid
+  name           String             @db.VarChar(150)
+  version        Int                @default(1)
+  status         FeeStructureStatus @default(DRAFT)
+  publishedAt    DateTime?          @map("published_at") @db.Timestamptz(6)
+  archivedAt     DateTime?          @map("archived_at") @db.Timestamptz(6)
+  createdAt      DateTime           @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt      DateTime           @default(now()) @updatedAt @map("updated_at") @db.Timestamptz(6)
+  createdBy      String?            @map("created_by") @db.Uuid
+
+  merchant     Merchant           @relation(fields: [merchantId], references: [id], onDelete: Cascade)
+  academicYear AcademicYear       @relation(fields: [academicYearId], references: [id], onDelete: Cascade)
+  academicTerm AcademicTerm       @relation(fields: [academicTermId], references: [id], onDelete: Cascade)
+  classLevel   ClassLevel         @relation(fields: [classLevelId], references: [id], onDelete: Restrict)
+  items        FeeStructureItem[]
+  invoices     FeeInvoice[]
+
+  @@unique([merchantId, academicYearId, academicTermId, classLevelId, version])
+  @@index([merchantId, status])
+  @@map("fee_structures")
+}
+
+model FeeStructureItem {
+  id             String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  feeStructureId String    @map("fee_structure_id") @db.Uuid
+  code           String    @db.VarChar(50)
+  name           String    @db.VarChar(150)
+  amount         Decimal   @db.Decimal(18, 2)
+  isMandatory    Boolean   @default(true) @map("is_mandatory")
+  dueDate        DateTime? @map("due_date") @db.Date
+  sortOrder      Int       @default(0) @map("sort_order")
+  createdAt      DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt      DateTime  @default(now()) @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  feeStructure FeeStructure    @relation(fields: [feeStructureId], references: [id], onDelete: Cascade)
+  invoiceLines FeeInvoiceLine[]
+
+  @@unique([feeStructureId, code])
+  @@map("fee_structure_items")
+}
+
+model FeeInvoiceSequence {
+  merchantId   String   @id @map("merchant_id") @db.Uuid
+  lastInvoice  Int      @default(0) @map("last_invoice")
+  lastReference Int     @default(0) @map("last_reference")
+  updatedAt    DateTime @default(now()) @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  merchant Merchant @relation(fields: [merchantId], references: [id], onDelete: Cascade)
+
+  @@map("fee_invoice_sequences")
+}
+
+model FeeInvoice {
+  id                 String           @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  merchantId         String           @map("merchant_id") @db.Uuid
+  studentId          String           @map("student_id") @db.Uuid
+  feeStructureId     String           @map("fee_structure_id") @db.Uuid
+  academicTermId     String           @map("academic_term_id") @db.Uuid
+  classLevelId       String           @map("class_level_id") @db.Uuid
+  invoiceNumber      String           @map("invoice_number") @db.VarChar(40)
+  paymentReference   String           @map("payment_reference") @db.VarChar(40)
+  status             FeeInvoiceStatus @default(UNPAID)
+  currency           String           @default("TZS") @db.Char(3)
+  subtotalAmount     Decimal          @map("subtotal_amount") @db.Decimal(18, 2)
+  adjustmentAmount   Decimal          @default(0) @map("adjustment_amount") @db.Decimal(18, 2)
+  totalAmount        Decimal          @map("total_amount") @db.Decimal(18, 2)
+  amountPaid         Decimal          @default(0) @map("amount_paid") @db.Decimal(18, 2)
+  outstandingBalance Decimal          @map("outstanding_balance") @db.Decimal(18, 2)
+  dueDate            DateTime?        @map("due_date") @db.Date
+  isOverdue          Boolean          @default(false) @map("is_overdue")
+  isLatePayment      Boolean          @default(false) @map("is_late_payment")
+  cancelledAt        DateTime?        @map("cancelled_at") @db.Timestamptz(6)
+  cancelReason       String?          @map("cancel_reason") @db.VarChar(500)
+  cancelledBy        String?          @map("cancelled_by") @db.Uuid
+  qrCodeId           String?          @map("qr_code_id") @db.Uuid
+  createdAt          DateTime         @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt          DateTime         @default(now()) @updatedAt @map("updated_at") @db.Timestamptz(6)
+  createdBy          String?          @map("created_by") @db.Uuid
+
+  merchant     Merchant               @relation(fields: [merchantId], references: [id], onDelete: Cascade)
+  student      Student                @relation(fields: [studentId], references: [id], onDelete: Restrict)
+  feeStructure FeeStructure           @relation(fields: [feeStructureId], references: [id], onDelete: Restrict)
+  academicTerm AcademicTerm           @relation(fields: [academicTermId], references: [id], onDelete: Restrict)
+  classLevel   ClassLevel             @relation(fields: [classLevelId], references: [id], onDelete: Restrict)
+  lines        FeeInvoiceLine[]
+  adjustments  FeeInvoiceAdjustment[]
+  payments     FeePayment[]
+  paymentAllocations FeePaymentAllocation[]
+
+  @@unique([invoiceNumber])
+  @@unique([paymentReference])
+  @@unique([studentId, academicTermId])
+  @@index([merchantId, status])
+  @@index([merchantId, classLevelId])
+  @@index([studentId])
+  @@map("fee_invoices")
+}
+
+model FeeInvoiceLine {
+  id                   String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  invoiceId            String   @map("invoice_id") @db.Uuid
+  feeStructureItemId   String?  @map("fee_structure_item_id") @db.Uuid
+  code                 String   @db.VarChar(50)
+  name                 String   @db.VarChar(150)
+  amount               Decimal  @db.Decimal(18, 2)
+  isMandatory          Boolean  @default(true) @map("is_mandatory")
+  dueDate              DateTime? @map("due_date") @db.Date
+  createdAt            DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  invoice          FeeInvoice            @relation(fields: [invoiceId], references: [id], onDelete: Cascade)
+  feeStructureItem FeeStructureItem?     @relation(fields: [feeStructureItemId], references: [id], onDelete: SetNull)
+  adjustments      FeeInvoiceAdjustment[]
+
+  @@index([invoiceId])
+  @@map("fee_invoice_lines")
+}
+
+model FeeInvoiceAdjustment {
+  id            String             @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  invoiceId     String             @map("invoice_id") @db.Uuid
+  invoiceLineId String?            @map("invoice_line_id") @db.Uuid
+  type          FeeAdjustmentType
+  reason        String             @db.VarChar(500)
+  percentOff    Decimal?           @map("percent_off") @db.Decimal(5, 2)
+  amountOff     Decimal            @map("amount_off") @db.Decimal(18, 2)
+  createdAt     DateTime           @default(now()) @map("created_at") @db.Timestamptz(6)
+  createdBy     String?            @map("created_by") @db.Uuid
+
+  invoice FeeInvoice      @relation(fields: [invoiceId], references: [id], onDelete: Cascade)
+  line    FeeInvoiceLine? @relation(fields: [invoiceLineId], references: [id], onDelete: SetNull)
+
+  @@index([invoiceId])
+  @@map("fee_invoice_adjustments")
+}
+
+model FeePayment {
+  id                  String                 @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  merchantId          String                 @map("merchant_id") @db.Uuid
+  /// Primary invoice when referenceType=INVOICE; null or first allocation target when STUDENT split
+  invoiceId           String?                @map("invoice_id") @db.Uuid
+  paymentReference    String                 @map("payment_reference") @db.VarChar(40)
+  referenceType       FeeReferenceType       @map("reference_type")
+  resolvedStudentId   String?                @map("resolved_student_id") @db.Uuid
+  resolvedInvoiceId   String?                @map("resolved_invoice_id") @db.Uuid
+  /// Snapshot of amount due at lookup — reconciliation key with gatewayTxnRef + paymentReference
+  amountDueAtLookup   Decimal                @map("amount_due_at_lookup") @db.Decimal(18, 2)
+  gatewayTxnRef       String                 @unique @map("gateway_txn_ref") @db.VarChar(100)
+  amount              Decimal                @db.Decimal(18, 2)
+  currency            String                 @default("TZS") @db.Char(3)
+  status              FeePaymentRecordStatus @default(PENDING)
+  channel             FeePaymentChannel      @default(MOCK)
+  channelDetail       String?                @map("channel_detail") @db.VarChar(100)
+  payerNameMasked     String?                @map("payer_name_masked") @db.VarChar(100)
+  payerMsisdnMasked   String?                @map("payer_msisdn_masked") @db.VarChar(20)
+  /// Timestamp reported by gateway / external system
+  gatewayPaidAt       DateTime?              @map("gateway_paid_at") @db.Timestamptz(6)
+  /// When MMS first recorded the payment
+  mmsReceivedAt       DateTime               @default(now()) @map("mms_received_at") @db.Timestamptz(6)
+  paidAt              DateTime?              @map("paid_at") @db.Timestamptz(6)
+  rawPayload          Json?                  @map("raw_payload")
+  createdAt           DateTime               @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt           DateTime               @default(now()) @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  merchant        Merchant              @relation(fields: [merchantId], references: [id], onDelete: Cascade)
+  invoice         FeeInvoice?           @relation(fields: [invoiceId], references: [id], onDelete: Restrict)
+  resolvedStudent Student?              @relation("FeePaymentResolvedStudent", fields: [resolvedStudentId], references: [id], onDelete: SetNull)
+  allocations     FeePaymentAllocation[]
+  reversals       FeePaymentReversal[]
+  lifecycleEvents FeePaymentLifecycleEvent[]
+  reconciliationMatches ReconciliationMatch[]
+  matchGroupLegs        ReconciliationMatchGroupLeg[]
+
+  @@index([invoiceId])
+  @@index([merchantId, paidAt])
+  @@index([merchantId, status, paidAt])
+  @@index([merchantId, channel, paidAt])
+  @@index([paymentReference])
+  @@index([resolvedStudentId])
+  @@index([gatewayTxnRef])
+  @@map("fee_payments")
+}
+
+model FeePaymentAllocation {
+  id           String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  feePaymentId String   @map("fee_payment_id") @db.Uuid
+  invoiceId    String   @map("invoice_id") @db.Uuid
+  merchantId   String   @map("merchant_id") @db.Uuid
+  amount       Decimal  @db.Decimal(18, 2)
+  createdAt    DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  payment FeePayment @relation(fields: [feePaymentId], references: [id], onDelete: Cascade)
+  invoice FeeInvoice @relation(fields: [invoiceId], references: [id], onDelete: Restrict)
+
+  @@index([feePaymentId])
+  @@index([invoiceId])
+  @@index([merchantId, invoiceId])
+  @@map("fee_payment_allocations")
+}
+
+model FeePaymentLifecycleEvent {
+  id           String                 @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  feePaymentId String                 @map("fee_payment_id") @db.Uuid
+  fromStatus   FeePaymentRecordStatus? @map("from_status")
+  toStatus     FeePaymentRecordStatus @map("to_status")
+  reason       String?                @db.VarChar(500)
+  actorId      String?                @map("actor_id") @db.Uuid
+  createdAt    DateTime               @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  payment FeePayment @relation(fields: [feePaymentId], references: [id], onDelete: Cascade)
+
+  @@index([feePaymentId, createdAt])
+  @@map("fee_payment_lifecycle_events")
+}
+
+model FeePaymentReversal {
+  id           String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  feePaymentId String   @map("fee_payment_id") @db.Uuid
+  merchantId   String   @map("merchant_id") @db.Uuid
+  amount       Decimal  @db.Decimal(18, 2)
+  reason       String   @db.VarChar(500)
+  actorId      String?  @map("actor_id") @db.Uuid
+  createdAt    DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  payment  FeePayment @relation(fields: [feePaymentId], references: [id], onDelete: Restrict)
+  merchant Merchant   @relation(fields: [merchantId], references: [id], onDelete: Cascade)
+
+  @@index([feePaymentId])
+  @@index([merchantId, createdAt])
+  @@map("fee_payment_reversals")
+}
+
+model SchoolDailyCollectionSnapshot {
+  id              String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  merchantId      String   @map("merchant_id") @db.Uuid
+  snapshotDate    DateTime @map("snapshot_date") @db.Date
+  totalCollected  Decimal  @map("total_collected") @db.Decimal(18, 2)
+  paymentCount    Int      @map("payment_count")
+  totalOutstanding Decimal @map("total_outstanding") @db.Decimal(18, 2)
+  byChannel       Json     @map("by_channel")
+  tipsMatchedCount    Int?     @map("tips_matched_count")
+  cbsMatchedCount     Int?     @map("cbs_matched_count")
+  fullyMatchedCount   Int?     @map("fully_matched_count")
+  exceptionOpenCount  Int?     @map("exception_open_count")
+  threeWaySummary     Json?    @map("three_way_summary")
+  createdAt       DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  merchant Merchant @relation(fields: [merchantId], references: [id], onDelete: Cascade)
+
+  @@unique([merchantId, snapshotDate])
+  @@index([snapshotDate])
+  @@map("school_daily_collection_snapshots")
+}
+
+model SettlementIngestBatch {
+  id           String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  source       ExternalSettlementSource
+  fileName     String?  @map("file_name") @db.VarChar(255)
+  fileHash     String?  @map("file_hash") @db.VarChar(64)
+  accepted     Int      @default(0)
+  rejected     Int      @default(0)
+  skipped      Int      @default(0)
+  report       Json?
+  createdBy    String?  @map("created_by") @db.Uuid
+  createdAt    DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  records ExternalSettlementRecord[]
+
+  @@index([createdAt])
+  @@unique([fileHash])
+  @@map("settlement_ingest_batches")
+}
+
+model ExternalSettlementRecord {
+  id                String                     @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  ingestBatchId     String?                    @map("ingest_batch_id") @db.Uuid
+  source            ExternalSettlementSource
+  externalTxnId     String                     @map("external_txn_id") @db.VarChar(100)
+  tipsTxnId         String?                    @map("tips_txn_id") @db.VarChar(100)
+  paymentReference  String?                    @map("payment_reference") @db.VarChar(40)
+  amount            Decimal                    @db.Decimal(18, 2)
+  currency          String                     @default("TZS") @db.Char(3)
+  valueDate         DateTime                   @map("value_date") @db.Timestamptz(6)
+  payerMsisdn       String?                    @map("payer_msisdn") @db.VarChar(30)
+  payerName         String?                    @map("payer_name") @db.VarChar(100)
+  narration         String?                    @db.VarChar(255)
+  creditAccount     String?                    @map("credit_account") @db.VarChar(50)
+  externalStatus    String?                    @map("external_status") @db.VarChar(40)
+  excludeFromMatching Boolean                  @default(false) @map("exclude_from_matching")
+  rawPayload        Json                       @map("raw_payload")
+  classification    ReconciliationClassification? 
+  classificationMeta Json?                     @map("classification_meta")
+  createdAt         DateTime                   @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  ingestBatch SettlementIngestBatch? @relation(fields: [ingestBatchId], references: [id], onDelete: SetNull)
+  match       ReconciliationMatch?
+  matchGroupLegs ReconciliationMatchGroupLeg[]
+
+  @@unique([source, externalTxnId])
+  @@index([paymentReference, valueDate])
+  @@index([tipsTxnId])
+  @@index([valueDate])
+  @@index([classification])
+  @@map("external_settlement_records")
+}
+
+model ReconciliationRun {
+  id          String                  @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  source      ExternalSettlementSource?
+  mode        String                  @default("TWO_WAY") @db.VarChar(20)
+  dateFrom    DateTime                @map("date_from") @db.Timestamptz(6)
+  dateTo      DateTime                @map("date_to") @db.Timestamptz(6)
+  status      ReconciliationRunStatus @default(RUNNING)
+  dateWindowDays Int                  @default(1) @map("date_window_days")
+  softDateVarianceDays Int            @default(1) @map("soft_date_variance_days")
+  hardDateVarianceDays Int            @default(3) @map("hard_date_variance_days")
+  summary     Json?
+  errorMessage String?                @map("error_message") @db.Text
+  startedAt   DateTime                @default(now()) @map("started_at") @db.Timestamptz(6)
+  finishedAt  DateTime?               @map("finished_at") @db.Timestamptz(6)
+  createdBy   String?                 @map("created_by") @db.Uuid
+
+  matches ReconciliationMatch[]
+  matchGroups ReconciliationMatchGroup[]
+  exceptionCases ReconciliationExceptionCase[]
+
+  @@index([startedAt])
+  @@map("reconciliation_runs")
+}
+
+model ReconciliationMatch {
+  id                       String                       @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  runId                    String                       @map("run_id") @db.Uuid
+  merchantId               String?                      @map("merchant_id") @db.Uuid
+  matchGroupId             String?                      @map("match_group_id") @db.Uuid
+  externalSettlementRecordId String?                    @unique @map("external_settlement_record_id") @db.Uuid
+  feePaymentId             String?                      @unique @map("fee_payment_id") @db.Uuid
+  rule                     ReconciliationMatchRule
+  classification           ReconciliationClassification
+  isManual                 Boolean                      @default(false) @map("is_manual")
+  flags                    Json?
+  amountDelta              Decimal?                     @map("amount_delta") @db.Decimal(18, 2)
+  dateDeltaHours           Int?                         @map("date_delta_hours")
+  context                  Json?
+  createdAt                DateTime                     @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  run        ReconciliationRun          @relation(fields: [runId], references: [id], onDelete: Cascade)
+  matchGroup ReconciliationMatchGroup?  @relation(fields: [matchGroupId], references: [id], onDelete: SetNull)
+  external   ExternalSettlementRecord?  @relation(fields: [externalSettlementRecordId], references: [id], onDelete: SetNull)
+  payment    FeePayment?                @relation(fields: [feePaymentId], references: [id], onDelete: SetNull)
+  merchant   Merchant?                  @relation(fields: [merchantId], references: [id], onDelete: SetNull)
+
+  @@index([runId, classification])
+  @@index([merchantId, runId])
+  @@index([matchGroupId])
+  @@map("reconciliation_matches")
+}
+
+model ReconciliationMatchGroup {
+  id         String           @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  runId      String           @map("run_id") @db.Uuid
+  merchantId String?          @map("merchant_id") @db.Uuid
+  status     MatchGroupStatus
+  fingerprint String?         @map("fingerprint") @db.VarChar(128)
+  summary    Json?
+  createdAt  DateTime         @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  run      ReconciliationRun @relation(fields: [runId], references: [id], onDelete: Cascade)
+  merchant Merchant?         @relation(fields: [merchantId], references: [id], onDelete: SetNull)
+  legs     ReconciliationMatchGroupLeg[]
+  matches  ReconciliationMatch[]
+  exceptionCases ReconciliationExceptionCase[]
+
+  @@index([runId, status])
+  @@index([merchantId, runId])
+  @@map("reconciliation_match_groups")
+}
+
+model ReconciliationMatchGroupLeg {
+  id                         String            @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  groupId                    String            @map("group_id") @db.Uuid
+  legType                    MatchGroupLegType @map("leg_type")
+  feePaymentId               String?           @map("fee_payment_id") @db.Uuid
+  externalSettlementRecordId String?           @map("external_settlement_record_id") @db.Uuid
+  amount                     Decimal           @db.Decimal(18, 2)
+  currency                   String            @default("TZS") @db.Char(3)
+  valueDate                  DateTime?         @map("value_date") @db.Timestamptz(6)
+  paymentReference           String?           @map("payment_reference") @db.VarChar(40)
+  createdAt                  DateTime          @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  group    ReconciliationMatchGroup  @relation(fields: [groupId], references: [id], onDelete: Cascade)
+  payment  FeePayment?               @relation(fields: [feePaymentId], references: [id], onDelete: SetNull)
+  external ExternalSettlementRecord? @relation(fields: [externalSettlementRecordId], references: [id], onDelete: SetNull)
+
+  @@index([groupId, legType])
+  @@index([feePaymentId])
+  @@index([externalSettlementRecordId])
+  @@map("reconciliation_match_group_legs")
+}
+
+model ReconciliationExceptionCase {
+  id              String                       @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  caseNumber      String                       @unique @map("case_number") @db.VarChar(40)
+  runId           String?                      @map("run_id") @db.Uuid
+  matchGroupId    String?                      @map("match_group_id") @db.Uuid
+  merchantId      String?                      @map("merchant_id") @db.Uuid
+  classification  ReconciliationClassification
+  status          ExceptionCaseStatus          @default(OPEN)
+  severity        ExceptionSeverity            @default(MEDIUM)
+  fingerprint     String                       @map("fingerprint") @db.VarChar(128)
+  title           String                       @db.VarChar(255)
+  summary         String?                      @db.Text
+  context         Json?
+  assigneeId      String?                      @map("assignee_id") @db.Uuid
+  approvalTaskId  String?                      @map("approval_task_id") @db.Uuid
+  pendingAction   ExceptionResolutionAction?   @map("pending_action")
+  pendingPayload  Json?                        @map("pending_payload")
+  resolutionNotes String?                      @map("resolution_notes") @db.Text
+  slaDueAt        DateTime?                    @map("sla_due_at") @db.Timestamptz(6)
+  resolvedAt      DateTime?                    @map("resolved_at") @db.Timestamptz(6)
+  closedAt        DateTime?                    @map("closed_at") @db.Timestamptz(6)
+  createdBy       String?                      @map("created_by") @db.Uuid
+  createdAt       DateTime                     @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt       DateTime                     @default(now()) @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  run        ReconciliationRun?        @relation(fields: [runId], references: [id], onDelete: SetNull)
+  matchGroup ReconciliationMatchGroup? @relation(fields: [matchGroupId], references: [id], onDelete: SetNull)
+  merchant   Merchant?                 @relation(fields: [merchantId], references: [id], onDelete: SetNull)
+  events     ReconciliationExceptionEvent[]
+  writeOffs  ReconciliationWriteOff[]
+
+  @@index([status, severity])
+  @@index([fingerprint])
+  @@index([merchantId, status])
+  @@index([runId])
+  @@map("reconciliation_exception_cases")
+}
+
+model ReconciliationExceptionEvent {
+  id        String                      @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  caseId    String                      @map("case_id") @db.Uuid
+  fromStatus ExceptionCaseStatus?       @map("from_status")
+  toStatus  ExceptionCaseStatus?        @map("to_status")
+  action    ExceptionResolutionAction?
+  note      String?                     @db.Text
+  actorId   String?                     @map("actor_id") @db.Uuid
+  payload   Json?
+  createdAt DateTime                    @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  exceptionCase ReconciliationExceptionCase @relation(fields: [caseId], references: [id], onDelete: Cascade)
+
+  @@index([caseId, createdAt])
+  @@map("reconciliation_exception_events")
+}
+
+model ReconciliationWriteOff {
+  id            String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  caseId        String   @map("case_id") @db.Uuid
+  merchantId    String?  @map("merchant_id") @db.Uuid
+  amount        Decimal  @db.Decimal(18, 2)
+  currency      String   @default("TZS") @db.Char(3)
+  reason        String   @db.VarChar(500)
+  approvedBy    String?  @map("approved_by") @db.Uuid
+  createdBy     String?  @map("created_by") @db.Uuid
+  createdAt     DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  exceptionCase ReconciliationExceptionCase @relation(fields: [caseId], references: [id], onDelete: Restrict)
+  merchant      Merchant?                   @relation(fields: [merchantId], references: [id], onDelete: SetNull)
+
+  @@index([caseId])
+  @@index([merchantId, createdAt])
+  @@map("reconciliation_write_offs")
+}
+
+model ReconciliationConfig {
+  id                     String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  acquirerId             String   @unique @map("acquirer_id") @db.Uuid
+  softDateVarianceDays   Int      @default(1) @map("soft_date_variance_days")
+  hardDateVarianceDays   Int      @default(3) @map("hard_date_variance_days")
+  makerCheckerEnabled    Boolean  @default(true) @map("maker_checker_enabled")
+  exceptionSlaHours      Int      @default(48) @map("exception_sla_hours")
+  createdAt              DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt              DateTime @default(now()) @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  @@map("reconciliation_configs")
+}
+
+model SchoolFeeSettings {
+  merchantId     String            @id @map("merchant_id") @db.Uuid
+  allocationRule FeeAllocationRule @default(OLDEST_DUE_FIRST) @map("allocation_rule")
+  createdAt      DateTime          @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt      DateTime          @default(now()) @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  merchant Merchant @relation(fields: [merchantId], references: [id], onDelete: Cascade)
+
+  @@map("school_fee_settings")
+}
+
+model ReferenceLookupLog {
+  id               String                  @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  merchantId       String?                 @map("merchant_id") @db.Uuid
+  reference        String                  @db.VarChar(40)
+  referenceType    FeeReferenceType?       @map("reference_type")
+  outcome          ReferenceLookupOutcome
+  channel          String                  @default("API") @db.VarChar(40)
+  amountDue        Decimal?                @map("amount_due") @db.Decimal(18, 2)
+  errorCode        String?                 @map("error_code") @db.VarChar(60)
+  resolvedInvoiceId String?                @map("resolved_invoice_id") @db.Uuid
+  resolvedStudentId String?                @map("resolved_student_id") @db.Uuid
+  createdAt        DateTime                @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  merchant Merchant? @relation(fields: [merchantId], references: [id], onDelete: SetNull)
+
+  @@index([reference, createdAt])
+  @@index([merchantId, createdAt])
+  @@index([outcome, createdAt])
+  @@map("reference_lookup_logs")
+}
+
+model StudentAccountCredit {
+  id         String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  merchantId String   @map("merchant_id") @db.Uuid
+  studentId  String   @map("student_id") @db.Uuid
+  amount     Decimal  @db.Decimal(18, 2)
+  reason     String   @db.VarChar(255)
+  feePaymentId String? @map("fee_payment_id") @db.Uuid
+  createdAt  DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  merchant Merchant @relation(fields: [merchantId], references: [id], onDelete: Cascade)
+  student  Student  @relation(fields: [studentId], references: [id], onDelete: Cascade)
+
+  @@index([studentId])
+  @@index([merchantId])
+  @@map("student_account_credits")
 }
 
 model StudentAlias {
