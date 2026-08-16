@@ -57,9 +57,13 @@ export enum Permission {
   QR_GENERATE = 'qr:generate',
   // Transactions
   TRANSACTIONS_READ = 'transactions:read',
+  TRANSACTIONS_OVERRIDE = 'transactions:override',
   // Settlements
   SETTLEMENTS_READ = 'settlements:read',
   SETTLEMENTS_APPROVE = 'settlements:approve',
+  // Reconciliation
+  RECONCILIATION_READ = 'reconciliation:read',
+  RECONCILIATION_RESOLVE = 'reconciliation:resolve',
   // Admin
   CONFIG_WRITE = 'config:write',
   AUDIT_READ = 'audit:read',

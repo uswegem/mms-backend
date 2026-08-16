@@ -55,4 +55,7 @@ export const envValidationSchema = Joi.object({
   VAULT_SECRET_ID: Joi.string().optional(),
   VAULT_JWT_KEY_NAME: Joi.string().optional(),
   VAULT_QR_KEY_NAME: Joi.string().optional(),
+  TIPS_WEBHOOK_SECRET: Joi.string().optional(),
+  PAYMENT_TIMEOUT_MINUTES: Joi.number().optional(),
+  SETTLEMENT_DEFAULT_MDR_RATE: Joi.number().optional(),
 });

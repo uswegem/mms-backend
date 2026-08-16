@@ -8,50 +8,211 @@ const ADMIN_PASSWORD = 'Admin@12345678';
 
 const PERMISSIONS = [
   { code: 'auth:login', module: 'auth', description: 'Login and logout' },
-  { code: 'auth:session:revoke-all', module: 'auth', description: 'Revoke all sessions' },
+  {
+    code: 'auth:session:revoke-all',
+    module: 'auth',
+    description: 'Revoke all sessions',
+  },
   { code: 'auth:mfa:manage', module: 'auth', description: 'Manage MFA' },
   { code: 'authz:role:read', module: 'authz', description: 'Read roles' },
-  { code: 'authz:role:write', module: 'authz', description: 'Create and manage custom roles' },
-  { code: 'authz:permission:read', module: 'authz', description: 'Read permission catalog' },
-  { code: 'authz:policy:override', module: 'authz', description: 'Manage policy overrides' },
+  {
+    code: 'authz:role:write',
+    module: 'authz',
+    description: 'Create and manage custom roles',
+  },
+  {
+    code: 'authz:permission:read',
+    module: 'authz',
+    description: 'Read permission catalog',
+  },
+  {
+    code: 'authz:policy:override',
+    module: 'authz',
+    description: 'Manage policy overrides',
+  },
   { code: 'authz:me', module: 'authz', description: 'View own permissions' },
   { code: 'user:read', module: 'users', description: 'List and read users' },
-  { code: 'user:write', module: 'users', description: 'Create and update users' },
+  {
+    code: 'user:write',
+    module: 'users',
+    description: 'Create and update users',
+  },
   { code: 'user:deactivate', module: 'users', description: 'Deactivate users' },
   { code: 'user:invite', module: 'users', description: 'Invite users' },
   { code: 'user:role:assign', module: 'users', description: 'Assign roles' },
-  { code: 'user:merchant:manage', module: 'users', description: 'Manage merchant-scoped users' },
+  {
+    code: 'user:merchant:manage',
+    module: 'users',
+    description: 'Manage merchant-scoped users',
+  },
   { code: 'merchant:read', module: 'merchants', description: 'Read merchants' },
-  { code: 'merchant:write', module: 'merchants', description: 'Create and update merchants' },
-  { code: 'merchant:suspend', module: 'merchants', description: 'Suspend, activate, dormant merchants' },
-  { code: 'merchant:close', module: 'merchants', description: 'Close merchants' },
-  { code: 'merchant:status:submit', module: 'merchants', description: 'Submit merchant for review' },
-  { code: 'merchant:status:approve', module: 'merchants', description: 'Maker move to pending approval' },
-  { code: 'merchant:status:checker:approve', module: 'merchants', description: 'Checker approve merchant' },
-  { code: 'merchant:status:reject', module: 'merchants', description: 'Reject merchant status' },
-  { code: 'merchant:kyc:read', module: 'merchants', description: 'Read merchant KYC documents' },
-  { code: 'merchant:kyc:write', module: 'merchants', description: 'Upload and submit KYC' },
-  { code: 'merchant:kyc:review', module: 'merchants', description: 'Review merchant KYC' },
-  { code: 'onboarding:read', module: 'onboarding', description: 'View onboarding applications' },
-  { code: 'onboarding:write', module: 'onboarding', description: 'Create and edit onboarding applications' },
-  { code: 'onboarding:submit', module: 'onboarding', description: 'Submit onboarding for approval' },
-  { code: 'onboarding:approve', module: 'onboarding', description: 'Maker approve onboarding' },
-  { code: 'onboarding:reject', module: 'onboarding', description: 'Reject onboarding application' },
-  { code: 'onboarding:aml:trigger', module: 'onboarding', description: 'Trigger AML screening' },
-  { code: 'approval:task:read', module: 'approvals', description: 'View approval tasks' },
-  { code: 'approval:task:approve', module: 'approvals', description: 'Checker approve tasks' },
-  { code: 'approval:task:reject', module: 'approvals', description: 'Checker reject tasks' },
-  { code: 'school:read', module: 'school', description: 'View school profiles' },
-  { code: 'school:write', module: 'school', description: 'Manage school profiles' },
-  { code: 'school:onboarding', module: 'school', description: 'Start school onboarding' },
-  { code: 'school:student:read', module: 'school', description: 'View school students' },
-  { code: 'school:student:write', module: 'school', description: 'Enrol school students' },
-  { code: 'school:student:bulk', module: 'school', description: 'Bulk student CSV upload' },
-  { code: 'alias:read', module: 'alias', description: 'Read Lipa Namba aliases' },
-  { code: 'alias:lookup', module: 'alias', description: 'Lookup alias ownership' },
+  {
+    code: 'merchant:write',
+    module: 'merchants',
+    description: 'Create and update merchants',
+  },
+  {
+    code: 'merchant:suspend',
+    module: 'merchants',
+    description: 'Suspend, activate, dormant merchants',
+  },
+  {
+    code: 'merchant:close',
+    module: 'merchants',
+    description: 'Close merchants',
+  },
+  {
+    code: 'merchant:status:submit',
+    module: 'merchants',
+    description: 'Submit merchant for review',
+  },
+  {
+    code: 'merchant:status:approve',
+    module: 'merchants',
+    description: 'Maker move to pending approval',
+  },
+  {
+    code: 'merchant:status:checker:approve',
+    module: 'merchants',
+    description: 'Checker approve merchant',
+  },
+  {
+    code: 'merchant:status:reject',
+    module: 'merchants',
+    description: 'Reject merchant status',
+  },
+  {
+    code: 'merchant:kyc:read',
+    module: 'merchants',
+    description: 'Read merchant KYC documents',
+  },
+  {
+    code: 'merchant:kyc:write',
+    module: 'merchants',
+    description: 'Upload and submit KYC',
+  },
+  {
+    code: 'merchant:kyc:review',
+    module: 'merchants',
+    description: 'Review merchant KYC',
+  },
+  {
+    code: 'onboarding:read',
+    module: 'onboarding',
+    description: 'View onboarding applications',
+  },
+  {
+    code: 'onboarding:write',
+    module: 'onboarding',
+    description: 'Create and edit onboarding applications',
+  },
+  {
+    code: 'onboarding:submit',
+    module: 'onboarding',
+    description: 'Submit onboarding for approval',
+  },
+  {
+    code: 'onboarding:approve',
+    module: 'onboarding',
+    description: 'Maker approve onboarding',
+  },
+  {
+    code: 'onboarding:reject',
+    module: 'onboarding',
+    description: 'Reject onboarding application',
+  },
+  {
+    code: 'onboarding:aml:trigger',
+    module: 'onboarding',
+    description: 'Trigger AML screening',
+  },
+  {
+    code: 'approval:task:read',
+    module: 'approvals',
+    description: 'View approval tasks',
+  },
+  {
+    code: 'approval:task:approve',
+    module: 'approvals',
+    description: 'Checker approve tasks',
+  },
+  {
+    code: 'approval:task:reject',
+    module: 'approvals',
+    description: 'Checker reject tasks',
+  },
+  {
+    code: 'school:read',
+    module: 'school',
+    description: 'View school profiles',
+  },
+  {
+    code: 'school:write',
+    module: 'school',
+    description: 'Manage school profiles',
+  },
+  {
+    code: 'school:onboarding',
+    module: 'school',
+    description: 'Start school onboarding',
+  },
+  {
+    code: 'school:student:read',
+    module: 'school',
+    description: 'View school students',
+  },
+  {
+    code: 'school:student:write',
+    module: 'school',
+    description: 'Enrol school students',
+  },
+  {
+    code: 'school:student:bulk',
+    module: 'school',
+    description: 'Bulk student CSV upload',
+  },
+  {
+    code: 'alias:read',
+    module: 'alias',
+    description: 'Read Lipa Namba aliases',
+  },
+  {
+    code: 'alias:lookup',
+    module: 'alias',
+    description: 'Lookup alias ownership',
+  },
   { code: 'qr:read', module: 'qr', description: 'Read QR codes' },
   { code: 'qr:generate', module: 'qr', description: 'Generate TANQR codes' },
-  { code: 'transactions:read', module: 'transactions', description: 'Read transactions' },
+  {
+    code: 'transactions:read',
+    module: 'transactions',
+    description: 'Read transactions',
+  },
+  {
+    code: 'transactions:override',
+    module: 'transactions',
+    description: 'Manually override a stuck/disputed payment status',
+  },
+  {
+    code: 'settlements:read',
+    module: 'settlements',
+    description: 'Read settlement cycles',
+  },
+  {
+    code: 'settlements:approve',
+    module: 'settlements',
+    description: 'Approve/re-run a settlement cycle',
+  },
+  {
+    code: 'reconciliation:read',
+    module: 'reconciliation',
+    description: 'Read reconciliation exceptions',
+  },
+  {
+    code: 'reconciliation:resolve',
+    module: 'reconciliation',
+    description: 'Resolve a reconciliation exception',
+  },
   { code: 'audit:read', module: 'audit', description: 'Read audit logs' },
 ];
 
@@ -113,6 +274,11 @@ const ROLES: Array<{
       'qr:read',
       'qr:generate',
       'transactions:read',
+      'transactions:override',
+      'settlements:read',
+      'settlements:approve',
+      'reconciliation:read',
+      'reconciliation:resolve',
       'audit:read',
     ],
   },
@@ -132,6 +298,10 @@ const ROLES: Array<{
       'school:read',
       'school:onboarding',
       'transactions:read',
+      'transactions:override',
+      'settlements:read',
+      'reconciliation:read',
+      'reconciliation:resolve',
     ],
   },
   {
@@ -311,10 +481,19 @@ async function main() {
   }
 
   const rejectionReasons = [
-    { code: 'INCOMPLETE_KYC', description: 'Mandatory KYC documents missing or invalid' },
+    {
+      code: 'INCOMPLETE_KYC',
+      description: 'Mandatory KYC documents missing or invalid',
+    },
     { code: 'AML_FAIL', description: 'AML screening failed' },
-    { code: 'ACCOUNT_MISMATCH', description: 'Settlement account verification failed' },
-    { code: 'INVALID_PROFILE', description: 'Merchant profile data incomplete' },
+    {
+      code: 'ACCOUNT_MISMATCH',
+      description: 'Settlement account verification failed',
+    },
+    {
+      code: 'INVALID_PROFILE',
+      description: 'Merchant profile data incomplete',
+    },
     { code: 'POLICY_VIOLATION', description: 'Does not meet acquirer policy' },
     { code: 'OTHER', description: 'Other — see notes' },
   ];
@@ -326,7 +505,11 @@ async function main() {
     });
   }
 
-  for (const entityType of ['MERCHANT_ONBOARDING', 'SCHOOL_ONBOARDING', 'MERCHANT_STATUS_CHANGE'] as const) {
+  for (const entityType of [
+    'MERCHANT_ONBOARDING',
+    'SCHOOL_ONBOARDING',
+    'MERCHANT_STATUS_CHANGE',
+  ] as const) {
     await prisma.approvalPolicy.upsert({
       where: {
         acquirerId_entityType: { acquirerId: acquirer.id, entityType },

@@ -65,6 +65,25 @@ export default () => ({
     storagePath: process.env.QR_STORAGE_PATH ?? 'storage',
     storageBucket: process.env.QR_STORAGE_BUCKET ?? 'local',
   },
+  // Mock adapter config (MockTipsPaymentProvider) — replace once BOT/TIPS
+  // sandbox credentials exist. No secret configured is a dev convenience,
+  // not something to leave unset in UAT/production.
+  tips: {
+    webhookSecret: process.env.TIPS_WEBHOOK_SECRET,
+  },
+  payments: {
+    // How long a payment may sit in INITIATED before the timeout-
+    // reconciliation job (§4.5) queries TIPS for its real status.
+    timeoutMinutes: parseInt(process.env.PAYMENT_TIMEOUT_MINUTES ?? '10', 10),
+  },
+  settlement: {
+    // Fallback MDR when a merchant has no MerchantSettlementConfig.mdr set
+    // — a placeholder pending Risk/Compliance's real fee schedule, same
+    // spirit as the KYC-tier limits gap already flagged in the audit.
+    defaultMdrRate: parseFloat(
+      process.env.SETTLEMENT_DEFAULT_MDR_RATE ?? '0.0085',
+    ),
+  },
   mail: {
     enabled: process.env.MAIL_ENABLED === 'true',
     host: process.env.MAIL_HOST,

@@ -230,6 +230,31 @@ enum PaymentChannel {
   @@map("payment_channel")
 }
 
+enum SettlementCycleStatus {
+  PENDING // computed, not yet swept
+  SWEPT // funds moved to the settlement account
+  POSTED // posted to the CBS ledger — the cycle's terminal state
+  FAILED
+
+  @@map("settlement_cycle_status")
+}
+
+enum ReconciliationExceptionType {
+  UNMATCHED_IN_REPORT // present in the TIPS settlement report, not in our ledger
+  UNMATCHED_IN_LEDGER // present in our ledger, not in the TIPS settlement report
+  DUPLICATE_REFERENCE
+
+  @@map("reconciliation_exception_type")
+}
+
+enum ReconciliationExceptionStatus {
+  OPEN
+  RESOLVED
+  WRITTEN_OFF
+
+  @@map("reconciliation_exception_status")
+}
+
 enum QrType {
   STATIC
   DYNAMIC
@@ -539,6 +564,8 @@ model Merchant {
   stores               MerchantStore[]
   settlementConfig     MerchantSettlementConfig?
   onboardingAuditLogs  OnboardingAuditLog[]
+  settlementCycles         SettlementCycle[]
+  reconciliationExceptions ReconciliationException[]
 
   @@index([acquirerId, status], map: "idx_merchants_acquirer_status")
   @@index([tradingName], map: "idx_merchants_trading_name")
@@ -1235,15 +1262,75 @@ model Payment {
   channel           PaymentChannel
   payerMsisdnMasked String?        @map("payer_msisdn_masked") @db.VarChar(20)
   payerNameMasked   String?        @map("payer_name_masked") @db.VarChar(100)
+  payerFsp          String?        @map("payer_fsp") @db.VarChar(50)
   tipsSettledAt     DateTime?      @map("tips_settled_at") @db.Timestamptz(6)
   receivedAt        DateTime       @default(now()) @map("received_at") @db.Timestamptz(6)
+  settlementCycleId String?        @map("settlement_cycle_id") @db.Uuid
   createdAt         DateTime       @default(now()) @map("created_at") @db.Timestamptz(6)
   updatedAt         DateTime       @default(now()) @updatedAt @map("updated_at") @db.Timestamptz(6)
 
-  acquirer Acquirer @relation(fields: [acquirerId], references: [id])
+  acquirer        Acquirer         @relation(fields: [acquirerId], references: [id])
+  merchant        Merchant         @relation(fields: [merchantId], references: [id])
+  settlementCycle SettlementCycle? @relation(fields: [settlementCycleId], references: [id])
+
+  @@index([merchantId, status])
+  @@index([merchantId, receivedAt])
+  @@index([settlementCycleId])
+  @@map("payments")
+}
+
+/// One row per merchant per settlement run — the sweep job (T+0/T+1) groups
+/// that day's SUCCESS payments not yet in a cycle, computes gross/MDR/net
+/// off MerchantSettlementConfig.mdr, then a mock CBS posting closes it out.
+model SettlementCycle {
+  id                  String                @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  merchantId          String                @map("merchant_id") @db.Uuid
+  cycleDate           DateTime              @map("cycle_date") @db.Date
+  status              SettlementCycleStatus @default(PENDING)
+  transactionCount    Int                   @default(0) @map("transaction_count")
+  grossAmount         Decimal               @default(0) @map("gross_amount") @db.Decimal(18, 2)
+  mdrAmount           Decimal               @default(0) @map("mdr_amount") @db.Decimal(18, 2)
+  netAmount           Decimal               @default(0) @map("net_amount") @db.Decimal(18, 2)
+  settlementAccountId String?               @map("settlement_account_id") @db.Uuid
+  cbsPostingRef       String?               @map("cbs_posting_ref") @db.VarChar(100)
+  sweptAt             DateTime?             @map("swept_at") @db.Timestamptz(6)
+  postedAt            DateTime?             @map("posted_at") @db.Timestamptz(6)
+  failureReason        String?              @map("failure_reason") @db.Text
+  createdAt           DateTime              @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt           DateTime              @default(now()) @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  merchant Merchant  @relation(fields: [merchantId], references: [id])
+  payments Payment[]
+
+  @@unique([merchantId, cycleDate])
+  @@index([merchantId, status])
+  @@map("settlement_cycles")
+}
+
+/// Reconciliation exception queue (Scope §recon screens) — items where our
+/// ledger and the TIPS settlement report for a cycle date don't agree.
+/// Only unmatched/duplicate items ever land here; a clean match writes
+/// nothing (per the design prototype's "only exceptions queued for a
+/// human" framing).
+model ReconciliationException {
+  id              String                         @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  merchantId      String                         @map("merchant_id") @db.Uuid
+  cycleDate       DateTime                       @map("cycle_date") @db.Date
+  type            ReconciliationExceptionType
+  tipsEndToEndId  String?                        @map("tips_end_to_end_id") @db.VarChar(100)
+  amount          Decimal?                       @db.Decimal(18, 2)
+  status          ReconciliationExceptionStatus  @default(OPEN)
+  resolutionNotes String?                        @map("resolution_notes") @db.Text
+  resolvedBy      String?                        @map("resolved_by") @db.Uuid
+  resolvedAt      DateTime?                      @map("resolved_at") @db.Timestamptz(6)
+  createdAt       DateTime                       @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt       DateTime                       @default(now()) @updatedAt @map("updated_at") @db.Timestamptz(6)
+
   merchant Merchant @relation(fields: [merchantId], references: [id])
 
-  @@map("payments")
+  @@index([merchantId, status])
+  @@index([cycleDate])
+  @@map("reconciliation_exceptions")
 }
 
 enum PolicyEffect {
