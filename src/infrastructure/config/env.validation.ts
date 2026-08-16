@@ -38,4 +38,7 @@ export const envValidationSchema = Joi.object({
   MFA_ENCRYPTION_KEY: Joi.string().length(64).optional(),
   MFA_ISSUER: Joi.string().optional(),
   BCRYPT_ROUNDS: Joi.number().optional(),
+  THROTTLE_TTL_MS: Joi.number().optional(),
+  THROTTLE_LIMIT: Joi.number().optional(),
+  THROTTLE_AUTH_LIMIT: Joi.number().optional(),
 });

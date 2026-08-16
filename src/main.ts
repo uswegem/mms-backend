@@ -3,6 +3,7 @@ import { ValidationPipe } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { NestExpressApplication } from '@nestjs/platform-express';
 import cookieParser from 'cookie-parser';
+import helmet from 'helmet';
 import { join } from 'path';
 import { AppModule } from './app.module';
 import { configureSwagger } from '@infrastructure/swagger/swagger.setup';
@@ -13,6 +14,15 @@ async function bootstrap() {
   const config = app.get(ConfigService);
 
   app.setGlobalPrefix('api/v1');
+  app.use(
+    helmet({
+      // Swagger UI (served from this same app) needs inline scripts/styles;
+      // the API itself serves no HTML, so this only relaxes the docs page.
+      contentSecurityPolicy: config.get<boolean>('swagger.enabled')
+        ? false
+        : undefined,
+    }),
+  );
   app.useStaticAssets(join(process.cwd(), config.get<string>('qr.storagePath') ?? 'storage'), {
     prefix: '/storage',
   });

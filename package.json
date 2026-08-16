@@ -32,6 +32,7 @@
   },
   "dependencies": {
     "@golevelup/nestjs-rabbitmq": "^9.0.2",
+    "@nest-lab/throttler-storage-redis": "^1.2.0",
     "@nestjs/cache-manager": "^3.1.2",
     "@nestjs/common": "^11.0.1",
     "@nestjs/config": "^4.0.4",
@@ -42,6 +43,7 @@
     "@nestjs/platform-express": "^11.0.1",
     "@nestjs/swagger": "^11.4.4",
     "@nestjs/terminus": "^11.1.1",
+    "@nestjs/throttler": "^6.5.0",
     "@prisma/client": "^6.19.3",
     "@supabase/supabase-js": "^2.107.0",
     "@types/ws": "^8.18.1",
@@ -53,6 +55,7 @@
     "class-validator": "^0.15.1",
     "cookie-parser": "^1.4.7",
     "csv-parse": "^7.0.1",
+    "helmet": "^8.3.0",
     "ioredis": "^5.11.1",
     "joi": "^18.2.1",
     "ms": "^2.1.3",

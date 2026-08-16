@@ -10,6 +10,7 @@ import {
 import { CommandBus } from '@nestjs/cqrs';
 import { ApiBearerAuth, ApiOperation, ApiResponse, ApiTags } from '@nestjs/swagger';
 import { ConfigService } from '@nestjs/config';
+import { Throttle } from '@nestjs/throttler';
 import type { Request, Response } from 'express';
 import { Public } from '@infrastructure/auth/rbac/decorators/public.decorator';
 import { RequirePermissions } from '@infrastructure/auth/rbac/decorators/permissions.decorator';
@@ -31,6 +32,14 @@ import { ResetPasswordDto } from '../dto/reset-password.dto';
 import { MfaSetupResponseDto, MfaVerifyDto, MfaVerifyResponseDto } from '../dto/mfa.dto';
 import { AuthCookieHelper } from './auth-cookie.helper';
 
+// Tighter than the global default (see infrastructure/throttler) — brief §5
+// calls for rate limiting specifically on auth endpoints to blunt
+// credential-stuffing / brute-force. Keep in sync with THROTTLE_AUTH_LIMIT /
+// THROTTLE_TTL_MS in .env.example; decorator values can't read ConfigService
+// at request time, so this is a static mirror of that default, not itself
+// env-driven.
+const AUTH_THROTTLE = { default: { limit: 5, ttl: 60_000 } };
+
 @ApiTags('Authentication')
 @Controller('auth')
 export class AuthController {
@@ -40,6 +49,7 @@ export class AuthController {
   ) {}
 
   @Public()
+  @Throttle(AUTH_THROTTLE)
   @Post('login')
   @HttpCode(HttpStatus.OK)
   @ApiOperation({ summary: 'Login with email and password' })
@@ -142,6 +152,7 @@ export class AuthController {
   }
 
   @Public()
+  @Throttle(AUTH_THROTTLE)
   @Post('password/forgot')
   @HttpCode(HttpStatus.OK)
   @ApiOperation({ summary: 'Request password reset email' })
@@ -152,6 +163,7 @@ export class AuthController {
   }
 
   @Public()
+  @Throttle(AUTH_THROTTLE)
   @Post('password/reset')
   @HttpCode(HttpStatus.OK)
   @ApiOperation({ summary: 'Reset password with token' })
@@ -173,6 +185,7 @@ export class AuthController {
   }
 
   @Public()
+  @Throttle(AUTH_THROTTLE)
   @Post('mfa/verify')
   @HttpCode(HttpStatus.OK)
   @ApiOperation({ summary: 'Verify MFA code and enable MFA' })

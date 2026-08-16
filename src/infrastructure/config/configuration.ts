@@ -48,6 +48,14 @@ export default () => ({
     pass: process.env.MAIL_PASS,
     from: process.env.MAIL_FROM ?? 'MMS <noreply@mms.local>',
   },
+  throttle: {
+    // Default limit applies to all routes not given a stricter @Throttle()
+    // override. Auth-specific limits are tighter to blunt credential
+    // stuffing / brute force (brief §5).
+    ttlMs: parseInt(process.env.THROTTLE_TTL_MS ?? '60000', 10),
+    defaultLimit: parseInt(process.env.THROTTLE_LIMIT ?? '120', 10),
+    authLimit: parseInt(process.env.THROTTLE_AUTH_LIMIT ?? '5', 10),
+  },
   auth: {
     maxFailedAttempts: parseInt(process.env.AUTH_MAX_FAILED_ATTEMPTS ?? '5', 10),
     lockoutDurationMinutes: parseInt(
