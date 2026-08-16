@@ -23,6 +23,9 @@ const handlers = [
     CqrsModule,
     AuthModule,
     AuditModule,
+    // Do not import SchoolFeesModule here — it creates a circular
+    // MerchantOnboarding ↔ MakerChecker ↔ SchoolFees graph. Recon
+    // exception callbacks resolve via ModuleRef (strict: false).
     forwardRef(() => MerchantOnboardingModule),
   ],
   controllers: [ApprovalsController],
