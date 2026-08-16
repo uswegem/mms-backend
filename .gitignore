@@ -1,8 +1,6 @@
 node_modules
 dist
 coverage
-.env
-.env.local
 .env.*.local
 !.env.example
 
@@ -10,3 +8,7 @@ coverage
 Database/.env
 Docs/scripts/node_modules
 **/node_modules
+branch_structure.json
+temp_auto_push.bat
+temp_interactive_push.bat
+config.bat

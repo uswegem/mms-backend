@@ -1,0 +1,385 @@
+-- DropIndex
+DROP INDEX "uq_tips_merchant_id_15";
+
+-- AlterTable
+ALTER TABLE "students" ADD COLUMN     "guardian_name" VARCHAR(255),
+ADD COLUMN     "status" "student_status" NOT NULL DEFAULT 'ACTIVE';
+
+-- CreateTable
+CREATE TABLE "academic_years" (
+    "id" UUID NOT NULL DEFAULT gen_random_uuid(),
+    "merchant_id" UUID NOT NULL,
+    "name" VARCHAR(50) NOT NULL,
+    "starts_on" DATE,
+    "ends_on" DATE,
+    "is_current" BOOLEAN NOT NULL DEFAULT false,
+    "created_at" TIMESTAMPTZ(6) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "updated_at" TIMESTAMPTZ(6) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+
+    CONSTRAINT "academic_years_pkey" PRIMARY KEY ("id")
+);
+
+-- CreateTable
+CREATE TABLE "academic_terms" (
+    "id" UUID NOT NULL DEFAULT gen_random_uuid(),
+    "merchant_id" UUID NOT NULL,
+    "academic_year_id" UUID NOT NULL,
+    "name" VARCHAR(50) NOT NULL,
+    "sequence" INTEGER NOT NULL DEFAULT 1,
+    "starts_on" DATE,
+    "ends_on" DATE,
+    "created_at" TIMESTAMPTZ(6) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "updated_at" TIMESTAMPTZ(6) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+
+    CONSTRAINT "academic_terms_pkey" PRIMARY KEY ("id")
+);
+
+-- CreateTable
+CREATE TABLE "class_levels" (
+    "id" UUID NOT NULL DEFAULT gen_random_uuid(),
+    "merchant_id" UUID NOT NULL,
+    "code" VARCHAR(30) NOT NULL,
+    "name" VARCHAR(100) NOT NULL,
+    "sort_order" INTEGER NOT NULL DEFAULT 0,
+    "is_active" BOOLEAN NOT NULL DEFAULT true,
+    "created_at" TIMESTAMPTZ(6) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "updated_at" TIMESTAMPTZ(6) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+
+    CONSTRAINT "class_levels_pkey" PRIMARY KEY ("id")
+);
+
+-- CreateTable
+CREATE TABLE "student_enrollments" (
+    "id" UUID NOT NULL DEFAULT gen_random_uuid(),
+    "merchant_id" UUID NOT NULL,
+    "student_id" UUID NOT NULL,
+    "academic_year_id" UUID NOT NULL,
+    "class_level_id" UUID NOT NULL,
+    "is_current" BOOLEAN NOT NULL DEFAULT true,
+    "enrolled_at" TIMESTAMPTZ(6) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "left_at" TIMESTAMPTZ(6),
+    "created_at" TIMESTAMPTZ(6) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "updated_at" TIMESTAMPTZ(6) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+
+    CONSTRAINT "student_enrollments_pkey" PRIMARY KEY ("id")
+);
+
+-- CreateTable
+CREATE TABLE "fee_structures" (
+    "id" UUID NOT NULL DEFAULT gen_random_uuid(),
+    "merchant_id" UUID NOT NULL,
+    "academic_year_id" UUID NOT NULL,
+    "academic_term_id" UUID NOT NULL,
+    "class_level_id" UUID NOT NULL,
+    "name" VARCHAR(150) NOT NULL,
+    "version" INTEGER NOT NULL DEFAULT 1,
+    "status" "fee_structure_status" NOT NULL DEFAULT 'DRAFT',
+    "published_at" TIMESTAMPTZ(6),
+    "archived_at" TIMESTAMPTZ(6),
+    "created_at" TIMESTAMPTZ(6) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "updated_at" TIMESTAMPTZ(6) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "created_by" UUID,
+
+    CONSTRAINT "fee_structures_pkey" PRIMARY KEY ("id")
+);
+
+-- CreateTable
+CREATE TABLE "fee_structure_items" (
+    "id" UUID NOT NULL DEFAULT gen_random_uuid(),
+    "fee_structure_id" UUID NOT NULL,
+    "code" VARCHAR(50) NOT NULL,
+    "name" VARCHAR(150) NOT NULL,
+    "amount" DECIMAL(18,2) NOT NULL,
+    "is_mandatory" BOOLEAN NOT NULL DEFAULT true,
+    "due_date" DATE,
+    "sort_order" INTEGER NOT NULL DEFAULT 0,
+    "created_at" TIMESTAMPTZ(6) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "updated_at" TIMESTAMPTZ(6) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+
+    CONSTRAINT "fee_structure_items_pkey" PRIMARY KEY ("id")
+);
+
+-- CreateTable
+CREATE TABLE "fee_invoice_sequences" (
+    "merchant_id" UUID NOT NULL,
+    "last_invoice" INTEGER NOT NULL DEFAULT 0,
+    "last_reference" INTEGER NOT NULL DEFAULT 0,
+    "updated_at" TIMESTAMPTZ(6) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+
+    CONSTRAINT "fee_invoice_sequences_pkey" PRIMARY KEY ("merchant_id")
+);
+
+-- CreateTable
+CREATE TABLE "fee_invoices" (
+    "id" UUID NOT NULL DEFAULT gen_random_uuid(),
+    "merchant_id" UUID NOT NULL,
+    "student_id" UUID NOT NULL,
+    "fee_structure_id" UUID NOT NULL,
+    "academic_term_id" UUID NOT NULL,
+    "class_level_id" UUID NOT NULL,
+    "invoice_number" VARCHAR(40) NOT NULL,
+    "payment_reference" VARCHAR(40) NOT NULL,
+    "status" "fee_invoice_status" NOT NULL DEFAULT 'UNPAID',
+    "currency" CHAR(3) NOT NULL DEFAULT 'TZS',
+    "subtotal_amount" DECIMAL(18,2) NOT NULL,
+    "adjustment_amount" DECIMAL(18,2) NOT NULL DEFAULT 0,
+    "total_amount" DECIMAL(18,2) NOT NULL,
+    "amount_paid" DECIMAL(18,2) NOT NULL DEFAULT 0,
+    "outstanding_balance" DECIMAL(18,2) NOT NULL,
+    "due_date" DATE,
+    "is_overdue" BOOLEAN NOT NULL DEFAULT false,
+    "is_late_payment" BOOLEAN NOT NULL DEFAULT false,
+    "cancelled_at" TIMESTAMPTZ(6),
+    "cancel_reason" VARCHAR(500),
+    "cancelled_by" UUID,
+    "qr_code_id" UUID,
+    "created_at" TIMESTAMPTZ(6) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "updated_at" TIMESTAMPTZ(6) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "created_by" UUID,
+
+    CONSTRAINT "fee_invoices_pkey" PRIMARY KEY ("id")
+);
+
+-- CreateTable
+CREATE TABLE "fee_invoice_lines" (
+    "id" UUID NOT NULL DEFAULT gen_random_uuid(),
+    "invoice_id" UUID NOT NULL,
+    "fee_structure_item_id" UUID,
+    "code" VARCHAR(50) NOT NULL,
+    "name" VARCHAR(150) NOT NULL,
+    "amount" DECIMAL(18,2) NOT NULL,
+    "is_mandatory" BOOLEAN NOT NULL DEFAULT true,
+    "due_date" DATE,
+    "created_at" TIMESTAMPTZ(6) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+
+    CONSTRAINT "fee_invoice_lines_pkey" PRIMARY KEY ("id")
+);
+
+-- CreateTable
+CREATE TABLE "fee_invoice_adjustments" (
+    "id" UUID NOT NULL DEFAULT gen_random_uuid(),
+    "invoice_id" UUID NOT NULL,
+    "invoice_line_id" UUID,
+    "type" "fee_adjustment_type" NOT NULL,
+    "reason" VARCHAR(500) NOT NULL,
+    "percent_off" DECIMAL(5,2),
+    "amount_off" DECIMAL(18,2) NOT NULL,
+    "created_at" TIMESTAMPTZ(6) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "created_by" UUID,
+
+    CONSTRAINT "fee_invoice_adjustments_pkey" PRIMARY KEY ("id")
+);
+
+-- CreateTable
+CREATE TABLE "fee_payments" (
+    "id" UUID NOT NULL DEFAULT gen_random_uuid(),
+    "merchant_id" UUID NOT NULL,
+    "invoice_id" UUID NOT NULL,
+    "payment_reference" VARCHAR(40) NOT NULL,
+    "gateway_txn_ref" VARCHAR(100) NOT NULL,
+    "amount" DECIMAL(18,2) NOT NULL,
+    "currency" CHAR(3) NOT NULL DEFAULT 'TZS',
+    "status" "fee_payment_record_status" NOT NULL DEFAULT 'PENDING',
+    "channel" "fee_payment_channel" NOT NULL DEFAULT 'MOCK',
+    "payer_name_masked" VARCHAR(100),
+    "payer_msisdn_masked" VARCHAR(20),
+    "paid_at" TIMESTAMPTZ(6),
+    "raw_payload" JSONB,
+    "created_at" TIMESTAMPTZ(6) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "updated_at" TIMESTAMPTZ(6) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+
+    CONSTRAINT "fee_payments_pkey" PRIMARY KEY ("id")
+);
+
+-- CreateTable
+CREATE TABLE "student_account_credits" (
+    "id" UUID NOT NULL DEFAULT gen_random_uuid(),
+    "merchant_id" UUID NOT NULL,
+    "student_id" UUID NOT NULL,
+    "amount" DECIMAL(18,2) NOT NULL,
+    "reason" VARCHAR(255) NOT NULL,
+    "fee_payment_id" UUID,
+    "created_at" TIMESTAMPTZ(6) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+
+    CONSTRAINT "student_account_credits_pkey" PRIMARY KEY ("id")
+);
+
+-- CreateIndex
+CREATE INDEX "academic_years_merchant_id_idx" ON "academic_years"("merchant_id");
+
+-- CreateIndex
+CREATE UNIQUE INDEX "academic_years_merchant_id_name_key" ON "academic_years"("merchant_id", "name");
+
+-- CreateIndex
+CREATE INDEX "academic_terms_merchant_id_idx" ON "academic_terms"("merchant_id");
+
+-- CreateIndex
+CREATE UNIQUE INDEX "academic_terms_academic_year_id_name_key" ON "academic_terms"("academic_year_id", "name");
+
+-- CreateIndex
+CREATE INDEX "class_levels_merchant_id_idx" ON "class_levels"("merchant_id");
+
+-- CreateIndex
+CREATE UNIQUE INDEX "class_levels_merchant_id_code_key" ON "class_levels"("merchant_id", "code");
+
+-- CreateIndex
+CREATE INDEX "student_enrollments_merchant_id_academic_year_id_class_leve_idx" ON "student_enrollments"("merchant_id", "academic_year_id", "class_level_id");
+
+-- CreateIndex
+CREATE UNIQUE INDEX "student_enrollments_student_id_academic_year_id_key" ON "student_enrollments"("student_id", "academic_year_id");
+
+-- CreateIndex
+CREATE INDEX "fee_structures_merchant_id_status_idx" ON "fee_structures"("merchant_id", "status");
+
+-- CreateIndex
+CREATE UNIQUE INDEX "fee_structures_merchant_id_academic_year_id_academic_term_i_key" ON "fee_structures"("merchant_id", "academic_year_id", "academic_term_id", "class_level_id", "version");
+
+-- CreateIndex
+CREATE UNIQUE INDEX "fee_structure_items_fee_structure_id_code_key" ON "fee_structure_items"("fee_structure_id", "code");
+
+-- CreateIndex
+CREATE INDEX "fee_invoices_merchant_id_status_idx" ON "fee_invoices"("merchant_id", "status");
+
+-- CreateIndex
+CREATE INDEX "fee_invoices_merchant_id_class_level_id_idx" ON "fee_invoices"("merchant_id", "class_level_id");
+
+-- CreateIndex
+CREATE INDEX "fee_invoices_student_id_idx" ON "fee_invoices"("student_id");
+
+-- CreateIndex
+CREATE UNIQUE INDEX "fee_invoices_invoice_number_key" ON "fee_invoices"("invoice_number");
+
+-- CreateIndex
+CREATE UNIQUE INDEX "fee_invoices_payment_reference_key" ON "fee_invoices"("payment_reference");
+
+-- CreateIndex
+CREATE UNIQUE INDEX "fee_invoices_student_id_academic_term_id_key" ON "fee_invoices"("student_id", "academic_term_id");
+
+-- CreateIndex
+CREATE INDEX "fee_invoice_lines_invoice_id_idx" ON "fee_invoice_lines"("invoice_id");
+
+-- CreateIndex
+CREATE INDEX "fee_invoice_adjustments_invoice_id_idx" ON "fee_invoice_adjustments"("invoice_id");
+
+-- CreateIndex
+CREATE UNIQUE INDEX "fee_payments_gateway_txn_ref_key" ON "fee_payments"("gateway_txn_ref");
+
+-- CreateIndex
+CREATE INDEX "fee_payments_invoice_id_idx" ON "fee_payments"("invoice_id");
+
+-- CreateIndex
+CREATE INDEX "fee_payments_merchant_id_paid_at_idx" ON "fee_payments"("merchant_id", "paid_at");
+
+-- CreateIndex
+CREATE INDEX "fee_payments_payment_reference_idx" ON "fee_payments"("payment_reference");
+
+-- CreateIndex
+CREATE INDEX "student_account_credits_student_id_idx" ON "student_account_credits"("student_id");
+
+-- CreateIndex
+CREATE INDEX "student_account_credits_merchant_id_idx" ON "student_account_credits"("merchant_id");
+
+-- CreateIndex
+CREATE INDEX "students_merchant_id_status_idx" ON "students"("merchant_id", "status");
+
+-- AddForeignKey
+ALTER TABLE "academic_years" ADD CONSTRAINT "academic_years_merchant_id_fkey" FOREIGN KEY ("merchant_id") REFERENCES "merchants"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "academic_terms" ADD CONSTRAINT "academic_terms_academic_year_id_fkey" FOREIGN KEY ("academic_year_id") REFERENCES "academic_years"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "class_levels" ADD CONSTRAINT "class_levels_merchant_id_fkey" FOREIGN KEY ("merchant_id") REFERENCES "merchants"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "student_enrollments" ADD CONSTRAINT "student_enrollments_student_id_fkey" FOREIGN KEY ("student_id") REFERENCES "students"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "student_enrollments" ADD CONSTRAINT "student_enrollments_academic_year_id_fkey" FOREIGN KEY ("academic_year_id") REFERENCES "academic_years"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "student_enrollments" ADD CONSTRAINT "student_enrollments_class_level_id_fkey" FOREIGN KEY ("class_level_id") REFERENCES "class_levels"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "fee_structures" ADD CONSTRAINT "fee_structures_merchant_id_fkey" FOREIGN KEY ("merchant_id") REFERENCES "merchants"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "fee_structures" ADD CONSTRAINT "fee_structures_academic_year_id_fkey" FOREIGN KEY ("academic_year_id") REFERENCES "academic_years"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "fee_structures" ADD CONSTRAINT "fee_structures_academic_term_id_fkey" FOREIGN KEY ("academic_term_id") REFERENCES "academic_terms"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "fee_structures" ADD CONSTRAINT "fee_structures_class_level_id_fkey" FOREIGN KEY ("class_level_id") REFERENCES "class_levels"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "fee_structure_items" ADD CONSTRAINT "fee_structure_items_fee_structure_id_fkey" FOREIGN KEY ("fee_structure_id") REFERENCES "fee_structures"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "fee_invoice_sequences" ADD CONSTRAINT "fee_invoice_sequences_merchant_id_fkey" FOREIGN KEY ("merchant_id") REFERENCES "merchants"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "fee_invoices" ADD CONSTRAINT "fee_invoices_merchant_id_fkey" FOREIGN KEY ("merchant_id") REFERENCES "merchants"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "fee_invoices" ADD CONSTRAINT "fee_invoices_student_id_fkey" FOREIGN KEY ("student_id") REFERENCES "students"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "fee_invoices" ADD CONSTRAINT "fee_invoices_fee_structure_id_fkey" FOREIGN KEY ("fee_structure_id") REFERENCES "fee_structures"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "fee_invoices" ADD CONSTRAINT "fee_invoices_academic_term_id_fkey" FOREIGN KEY ("academic_term_id") REFERENCES "academic_terms"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "fee_invoices" ADD CONSTRAINT "fee_invoices_class_level_id_fkey" FOREIGN KEY ("class_level_id") REFERENCES "class_levels"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "fee_invoice_lines" ADD CONSTRAINT "fee_invoice_lines_invoice_id_fkey" FOREIGN KEY ("invoice_id") REFERENCES "fee_invoices"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "fee_invoice_lines" ADD CONSTRAINT "fee_invoice_lines_fee_structure_item_id_fkey" FOREIGN KEY ("fee_structure_item_id") REFERENCES "fee_structure_items"("id") ON DELETE SET NULL ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "fee_invoice_adjustments" ADD CONSTRAINT "fee_invoice_adjustments_invoice_id_fkey" FOREIGN KEY ("invoice_id") REFERENCES "fee_invoices"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "fee_invoice_adjustments" ADD CONSTRAINT "fee_invoice_adjustments_invoice_line_id_fkey" FOREIGN KEY ("invoice_line_id") REFERENCES "fee_invoice_lines"("id") ON DELETE SET NULL ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "fee_payments" ADD CONSTRAINT "fee_payments_merchant_id_fkey" FOREIGN KEY ("merchant_id") REFERENCES "merchants"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "fee_payments" ADD CONSTRAINT "fee_payments_invoice_id_fkey" FOREIGN KEY ("invoice_id") REFERENCES "fee_invoices"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "student_account_credits" ADD CONSTRAINT "student_account_credits_merchant_id_fkey" FOREIGN KEY ("merchant_id") REFERENCES "merchants"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "student_account_credits" ADD CONSTRAINT "student_account_credits_student_id_fkey" FOREIGN KEY ("student_id") REFERENCES "students"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "tips_registrations" ADD CONSTRAINT "tips_registrations_merchant_id_fkey" FOREIGN KEY ("merchant_id") REFERENCES "merchants"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "qr_render_assets" ADD CONSTRAINT "qr_render_assets_qr_id_fkey" FOREIGN KEY ("qr_id") REFERENCES "qr_codes"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "qr_render_assets" ADD CONSTRAINT "qr_render_assets_payload_version_id_fkey" FOREIGN KEY ("payload_version_id") REFERENCES "qr_payload_versions"("id") ON DELETE SET NULL ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "policy_overrides" ADD CONSTRAINT "policy_overrides_acquirer_id_fkey" FOREIGN KEY ("acquirer_id") REFERENCES "acquirers"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "policy_overrides" ADD CONSTRAINT "policy_overrides_user_id_fkey" FOREIGN KEY ("user_id") REFERENCES "users"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- RenameIndex
+ALTER INDEX "idx_policy_overrides_acquirer" RENAME TO "policy_overrides_acquirer_id_idx";
+
+-- RenameIndex
+ALTER INDEX "idx_policy_overrides_user_perm" RENAME TO "policy_overrides_user_id_permission_code_idx";
+
+-- RenameIndex
+ALTER INDEX "idx_qr_codes_merchant_static_lookup" RENAME TO "qr_codes_merchant_id_qr_type_status_store_id_terminal_id_idx";
+
+-- RenameIndex
+ALTER INDEX "idx_qr_render_assets_qr_id" RENAME TO "qr_render_assets_qr_id_idx";
