@@ -11,6 +11,7 @@ import { LoginAttemptRepository } from './infrastructure/persistence/login-attem
 import { PasswordHasherService } from './infrastructure/services/password-hasher.service';
 import { TotpMfaService } from './infrastructure/services/totp-mfa.service';
 import { JwtTokenService } from './infrastructure/services/jwt-token.service';
+import { JwtKeyCacheService } from './infrastructure/services/jwt-key-cache.service';
 import { EnrichedAuthUserService } from './infrastructure/services/enriched-auth-user.service';
 import { JwtStrategy } from './infrastructure/strategies/jwt.strategy';
 import { PasswordHasherPort } from './application/ports/password-hasher.port';
@@ -47,6 +48,7 @@ const CommandHandlers = [
     PasswordResetRepository,
     LoginAttemptRepository,
     EnrichedAuthUserService,
+    JwtKeyCacheService,
     JwtStrategy,
     { provide: PasswordHasherPort, useClass: PasswordHasherService },
     { provide: TokenServicePort, useClass: JwtTokenService },

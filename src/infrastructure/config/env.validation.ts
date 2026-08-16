@@ -48,4 +48,11 @@ export const envValidationSchema = Joi.object({
   ARGON2_MIGRATION_START_DATE: Joi.string().optional(),
   ARGON2_BACKSTOP_DAYS: Joi.number().optional(),
   ARGON2_BACKSTOP_WARNING_DAYS: Joi.number().optional(),
+  JWT_PUBLIC_KEY_CACHE_TTL_MS: Joi.number().optional(),
+  VAULT_ADDR: Joi.string().optional(),
+  VAULT_TOKEN: Joi.string().optional(),
+  VAULT_ROLE_ID: Joi.string().optional(),
+  VAULT_SECRET_ID: Joi.string().optional(),
+  VAULT_JWT_KEY_NAME: Joi.string().optional(),
+  VAULT_QR_KEY_NAME: Joi.string().optional(),
 });

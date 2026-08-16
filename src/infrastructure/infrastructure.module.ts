@@ -11,6 +11,7 @@ import { QueueModule } from './queue/queue.module';
 import { SupabaseModule } from './integrations/supabase/supabase.module';
 import { EmailModule } from './email/email.module';
 import { ThrottlerConfigModule } from './throttler/throttler.module';
+import { VaultModule } from './vault/vault.module';
 import { JwtAuthGuard } from './auth/rbac/guards/jwt-auth.guard';
 import { RolesGuard } from './auth/rbac/guards/roles.guard';
 import { PermissionsGuard } from './auth/rbac/guards/permissions.guard';
@@ -27,6 +28,7 @@ import { PermissionsGuard } from './auth/rbac/guards/permissions.guard';
     SupabaseModule,
     EmailModule,
     ThrottlerConfigModule,
+    VaultModule,
   ],
   providers: [
     // ThrottlerGuard runs first so rate limits apply even to @Public()

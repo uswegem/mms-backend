@@ -19,10 +19,36 @@ export default () => ({
     origin: process.env.CORS_ORIGIN ?? 'http://localhost:3000',
   },
   jwt: {
+    // No longer used for signing — access tokens are RS256, signed by Vault
+    // Transit (see `vault` below). Left defined only because
+    // JWT_REFRESH_SECRET was already unused dead config before this
+    // migration (refresh tokens are opaque random bytes, never JWTs) and
+    // removing both in the same pass isn't this migration's job.
     accessSecret: process.env.JWT_ACCESS_SECRET ?? 'change-me-access',
     refreshSecret: process.env.JWT_REFRESH_SECRET ?? 'change-me-refresh',
     accessExpiresIn: process.env.JWT_ACCESS_EXPIRES_IN ?? '15m',
     refreshExpiresIn: process.env.JWT_REFRESH_EXPIRES_IN ?? '7d',
+    // How long a fetched Vault public key is trusted before re-fetching.
+    // On rotation (brief §2.5) the old version stays cached under its own
+    // key — this TTL only governs how quickly a newly-rotated *latest*
+    // version is picked up for signing.
+    publicKeyCacheTtlMs: parseInt(
+      process.env.JWT_PUBLIC_KEY_CACHE_TTL_MS ?? '3600000',
+      10,
+    ),
+  },
+  // Auth migration brief §2.2. VAULT_TOKEN is the dev-mode path (fixed root
+  // token, docker-compose); VAULT_ROLE_ID/VAULT_SECRET_ID is the AppRole
+  // path `npm run vault:setup` provisions. Production Vault deployment
+  // target (self-hosted Hetzner vs. managed) is still open — see
+  // docs/architecture-decisions.
+  vault: {
+    addr: process.env.VAULT_ADDR ?? 'http://127.0.0.1:8200',
+    token: process.env.VAULT_TOKEN,
+    roleId: process.env.VAULT_ROLE_ID,
+    secretId: process.env.VAULT_SECRET_ID,
+    jwtKeyName: process.env.VAULT_JWT_KEY_NAME ?? 'mms-jwt-signing',
+    qrKeyName: process.env.VAULT_QR_KEY_NAME ?? 'mms-qr-signing',
   },
   swagger: {
     enabled: process.env.SWAGGER_ENABLED !== 'false',
