@@ -41,4 +41,11 @@ export const envValidationSchema = Joi.object({
   THROTTLE_TTL_MS: Joi.number().optional(),
   THROTTLE_LIMIT: Joi.number().optional(),
   THROTTLE_AUTH_LIMIT: Joi.number().optional(),
+  ARGON2_MEMORY_COST_KIB: Joi.number().optional(),
+  ARGON2_TIME_COST: Joi.number().optional(),
+  ARGON2_PARALLELISM: Joi.number().optional(),
+  AUTH_PRIVILEGED_ROLE_CODES: Joi.string().optional(),
+  ARGON2_MIGRATION_START_DATE: Joi.string().optional(),
+  ARGON2_BACKSTOP_DAYS: Joi.number().optional(),
+  ARGON2_BACKSTOP_WARNING_DAYS: Joi.number().optional(),
 });

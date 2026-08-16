@@ -1,6 +1,6 @@
 import { CommandHandler, ICommandHandler } from '@nestjs/cqrs';
 import { ConfigService } from '@nestjs/config';
-import { UserStatus } from '@prisma/client';
+import { PasswordAlgo, UserStatus } from '@prisma/client';
 import { LoginCommand } from '../commands/login.command';
 import { UserRepository } from '../../infrastructure/persistence/user.repository';
 import { AuthCredentialRepository } from '../../infrastructure/persistence/auth-credential.repository';
@@ -13,6 +13,7 @@ import {
   InvalidCredentialsException,
   InvalidMfaCodeException,
   MfaRequiredException,
+  PasswordResetRequiredException,
   UserNotActiveException,
 } from '../../domain/exceptions/auth.exceptions';
 import { AuditLogService } from '@infrastructure/audit/services/audit-log.service';
@@ -27,7 +28,10 @@ export interface LoginResult {
 }
 
 @CommandHandler(LoginCommand)
-export class LoginHandler implements ICommandHandler<LoginCommand, LoginResult> {
+export class LoginHandler implements ICommandHandler<
+  LoginCommand,
+  LoginResult
+> {
   constructor(
     private readonly users: UserRepository,
     private readonly credentials: AuthCredentialRepository,
@@ -69,10 +73,12 @@ export class LoginHandler implements ICommandHandler<LoginCommand, LoginResult> 
     const passwordValid = await this.passwordHasher.verify(
       command.password,
       cred.passwordHash,
+      cred.passwordAlgo,
     );
 
     if (!passwordValid) {
-      const maxAttempts = this.config.get<number>('auth.maxFailedAttempts') ?? 5;
+      const maxAttempts =
+        this.config.get<number>('auth.maxFailedAttempts') ?? 5;
       const lockoutMinutes =
         this.config.get<number>('auth.lockoutDurationMinutes') ?? 15;
       await this.credentials.recordFailedAttempt(
@@ -109,6 +115,39 @@ export class LoginHandler implements ICommandHandler<LoginCommand, LoginResult> 
     }
 
     await this.credentials.resetFailedAttempts(user.id);
+
+    // Credentials (and MFA, if enabled) are valid at this point. A
+    // forced-reset flag — set at Argon2id migration cutover for privileged
+    // accounts, or by the 90-day backstop job — blocks session issuance
+    // regardless: the account must go through the explicit reset flow
+    // before it can log in normally again (brief §1.3/§1.4).
+    if (cred.mustResetPassword) {
+      await this.loginAttempts.record(
+        command.email,
+        true,
+        command.ipAddress,
+        command.userAgent,
+      );
+      await this.audit.record({
+        actorId: user.id,
+        action: 'AUTH_LOGIN_BLOCKED_PASSWORD_RESET_REQUIRED',
+        entityType: 'user',
+        entityId: user.id,
+        metadata: { email: user.email },
+        ipAddress: command.ipAddress,
+        userAgent: command.userAgent,
+      });
+      throw new PasswordResetRequiredException();
+    }
+
+    // Lazy rehash (brief §1.2): the plaintext just verified successfully
+    // against the old bcrypt hash, so upgrade it to Argon2id now — never
+    // re-derive it later, this is the only point it's available in memory.
+    if (cred.passwordAlgo === PasswordAlgo.BCRYPT) {
+      const upgradedHash = await this.passwordHasher.hash(command.password);
+      await this.credentials.migratePasswordHash(user.id, upgradedHash);
+    }
+
     await this.users.updateLastLogin(user.id);
     await this.loginAttempts.record(
       command.email,

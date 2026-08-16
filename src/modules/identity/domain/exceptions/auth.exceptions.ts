@@ -21,7 +21,10 @@ export class AccountLockedException extends AppException {
       lockoutUntil
         ? `Account is locked until ${lockoutUntil.toISOString()}`
         : 'Account is locked',
-      { title: 'Account Locked', extra: { lockoutUntil: lockoutUntil?.toISOString() } },
+      {
+        title: 'Account Locked',
+        extra: { lockoutUntil: lockoutUntil?.toISOString() },
+      },
     );
   }
 }
@@ -66,6 +69,26 @@ export class InvalidResetTokenException extends AppException {
       HttpStatus.BAD_REQUEST,
       'Invalid or expired password reset token',
       { title: 'Invalid Reset Token' },
+    );
+  }
+}
+
+/**
+ * Credentials were valid, but the account is flagged to reset its password
+ * before a session can be issued (brief §1.3 — privileged-account cutover;
+ * §1.4 — 90-day backstop). The frontend routes to the forced-reset flow
+ * instead of treating this as a normal auth failure.
+ */
+export class PasswordResetRequiredException extends AppException {
+  constructor() {
+    super(
+      ErrorCodes.AUTH_PASSWORD_RESET_REQUIRED,
+      HttpStatus.FORBIDDEN,
+      'Password reset is required before you can sign in',
+      {
+        title: 'Password Reset Required',
+        extra: { passwordResetRequired: true },
+      },
     );
   }
 }

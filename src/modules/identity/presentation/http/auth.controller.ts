@@ -8,7 +8,12 @@ import {
   Res,
 } from '@nestjs/common';
 import { CommandBus } from '@nestjs/cqrs';
-import { ApiBearerAuth, ApiOperation, ApiResponse, ApiTags } from '@nestjs/swagger';
+import {
+  ApiBearerAuth,
+  ApiOperation,
+  ApiResponse,
+  ApiTags,
+} from '@nestjs/swagger';
 import { ConfigService } from '@nestjs/config';
 import { Throttle } from '@nestjs/throttler';
 import type { Request, Response } from 'express';
@@ -27,9 +32,16 @@ import { ResetPasswordCommand } from '../../application/commands/reset-password.
 import { MfaSetupCommand } from '../../application/commands/mfa-setup.command';
 import { MfaVerifyCommand } from '../../application/commands/mfa-verify.command';
 import { LoginDto, TokenResponseDto } from '../dto/login.dto';
-import { ForgotPasswordDto, ForgotPasswordResponseDto } from '../dto/forgot-password.dto';
+import {
+  ForgotPasswordDto,
+  ForgotPasswordResponseDto,
+} from '../dto/forgot-password.dto';
 import { ResetPasswordDto } from '../dto/reset-password.dto';
-import { MfaSetupResponseDto, MfaVerifyDto, MfaVerifyResponseDto } from '../dto/mfa.dto';
+import {
+  MfaSetupResponseDto,
+  MfaVerifyDto,
+  MfaVerifyResponseDto,
+} from '../dto/mfa.dto';
 import { AuthCookieHelper } from './auth-cookie.helper';
 
 // Tighter than the global default (see infrastructure/throttler) — brief §5
@@ -132,9 +144,7 @@ export class AuthController {
       req.cookies,
       this.config,
     );
-    await this.commandBus.execute(
-      new LogoutCommand(user.sub, refreshToken),
-    );
+    await this.commandBus.execute(new LogoutCommand(user.sub, refreshToken));
     AuthCookieHelper.clearRefreshCookie(res, this.config);
   }
 
@@ -189,9 +199,7 @@ export class AuthController {
   @Post('mfa/verify')
   @HttpCode(HttpStatus.OK)
   @ApiOperation({ summary: 'Verify MFA code and enable MFA' })
-  async mfaVerify(
-    @Body() dto: MfaVerifyDto,
-  ): Promise<MfaVerifyResponseDto> {
+  async mfaVerify(@Body() dto: MfaVerifyDto): Promise<MfaVerifyResponseDto> {
     const result = await this.commandBus.execute(
       new MfaVerifyCommand(dto.email, dto.mfaCode),
     );

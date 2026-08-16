@@ -1,5 +1,5 @@
 import { Injectable } from '@nestjs/common';
-import { Prisma, UserStatus } from '@prisma/client';
+import { PasswordAlgo, Prisma, UserStatus } from '@prisma/client';
 import { PrismaService } from '@infrastructure/database/prisma/prisma.service';
 
 /** Supabase pooler latency — avoid default 5s interactive transaction timeout */
@@ -92,7 +92,16 @@ export class UsersRepository {
             status: data.status,
             createdBy: data.createdBy,
             profile: { create: { phone: data.phone } },
-            authCredential: { create: { passwordHash: data.passwordHash } },
+            // PasswordHasherService.hash() always produces Argon2id — set
+            // the algo column explicitly rather than relying on its BCRYPT
+            // schema default, which exists only to correctly describe rows
+            // that predate this migration.
+            authCredential: {
+              create: {
+                passwordHash: data.passwordHash,
+                passwordAlgo: PasswordAlgo.ARGON2ID,
+              },
+            },
             userRoles: {
               create: data.roleIds.map((roleId) => ({
                 roleId,
@@ -135,8 +144,16 @@ export class UsersRepository {
 
       await tx.authCredential.upsert({
         where: { userId },
-        update: { passwordHash: data.passwordHash },
-        create: { userId, passwordHash: data.passwordHash },
+        update: {
+          passwordHash: data.passwordHash,
+          passwordAlgo: PasswordAlgo.ARGON2ID,
+          mustResetPassword: false,
+        },
+        create: {
+          userId,
+          passwordHash: data.passwordHash,
+          passwordAlgo: PasswordAlgo.ARGON2ID,
+        },
       });
 
       await tx.userProfile.upsert({
@@ -176,51 +193,45 @@ export class UsersRepository {
     id: string,
     data: { fullName?: string; phone?: string; updatedBy: string },
   ): Promise<UserWithRelations> {
-    return this.prisma.$transaction(
-      async (tx) => {
-        if (data.phone !== undefined) {
-          await tx.userProfile.upsert({
-            where: { userId: id },
-            update: { phone: data.phone },
-            create: { userId: id, phone: data.phone },
-          });
-        }
-        return tx.user.update({
-          where: { id },
-          data: {
-            ...(data.fullName ? { fullName: data.fullName } : {}),
-            updatedBy: data.updatedBy,
-          },
-          include: userInclude,
+    return this.prisma.$transaction(async (tx) => {
+      if (data.phone !== undefined) {
+        await tx.userProfile.upsert({
+          where: { userId: id },
+          update: { phone: data.phone },
+          create: { userId: id, phone: data.phone },
         });
-      },
-      TX_OPTIONS,
-    );
+      }
+      return tx.user.update({
+        where: { id },
+        data: {
+          ...(data.fullName ? { fullName: data.fullName } : {}),
+          updatedBy: data.updatedBy,
+        },
+        include: userInclude,
+      });
+    }, TX_OPTIONS);
   }
 
   async deactivate(id: string, actorId: string): Promise<UserWithRelations> {
-    return this.prisma.$transaction(
-      async (tx) => {
-        const [, user] = await Promise.all([
-          tx.refreshToken.updateMany({
-            where: { userId: id, revokedAt: null },
-            data: { revokedAt: new Date() },
-          }),
-          tx.user.update({
-            where: { id },
-            data: {
-              status: 'INACTIVE',
-              deletedAt: new Date(),
-              deletedBy: actorId,
-              updatedBy: actorId,
-            },
-            include: userInclude,
-          }),
-        ]);
-        return user;
-      },
-      TX_OPTIONS,
-    );
+    return this.prisma.$transaction(async (tx) => {
+      const [, user] = await Promise.all([
+        tx.refreshToken.updateMany({
+          where: { userId: id, revokedAt: null },
+          data: { revokedAt: new Date() },
+        }),
+        tx.user.update({
+          where: { id },
+          data: {
+            status: 'INACTIVE',
+            deletedAt: new Date(),
+            deletedBy: actorId,
+            updatedBy: actorId,
+          },
+          include: userInclude,
+        }),
+      ]);
+      return user;
+    }, TX_OPTIONS);
   }
 
   async assignRoles(
@@ -230,27 +241,24 @@ export class UsersRepository {
     scopeId: string | null,
     actorId: string,
   ): Promise<UserWithRelations> {
-    return this.prisma.$transaction(
-      async (tx) => {
-        await tx.userRole.deleteMany({ where: { userId } });
-        if (roleIds.length) {
-          await tx.userRole.createMany({
-            data: roleIds.map((roleId) => ({
-              userId,
-              roleId,
-              scopeType,
-              scopeId,
-              createdBy: actorId,
-            })),
-          });
-        }
-        return tx.user.findUniqueOrThrow({
-          where: { id: userId },
-          include: userInclude,
+    return this.prisma.$transaction(async (tx) => {
+      await tx.userRole.deleteMany({ where: { userId } });
+      if (roleIds.length) {
+        await tx.userRole.createMany({
+          data: roleIds.map((roleId) => ({
+            userId,
+            roleId,
+            scopeType,
+            scopeId,
+            createdBy: actorId,
+          })),
         });
-      },
-      TX_OPTIONS,
-    );
+      }
+      return tx.user.findUniqueOrThrow({
+        where: { id: userId },
+        include: userInclude,
+      });
+    }, TX_OPTIONS);
   }
 
   async createInvitation(data: {

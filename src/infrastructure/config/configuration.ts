@@ -56,8 +56,29 @@ export default () => ({
     defaultLimit: parseInt(process.env.THROTTLE_LIMIT ?? '120', 10),
     authLimit: parseInt(process.env.THROTTLE_AUTH_LIMIT ?? '5', 10),
   },
+  // Argon2id parameters — OWASP Password Storage Cheat Sheet's primary
+  // recommendation (m=19456 KiB / t=2 / p=1), chosen as a safe floor because
+  // the target Hetzner instance's actual CPU/memory budget hasn't been
+  // confirmed yet (brief §4, open question #1). Raise memoryCost first if
+  // profiling on the real instance shows headroom — see
+  // docs/architecture-decisions for the record of what's chosen and why.
+  argon2: {
+    memoryCostKib: parseInt(process.env.ARGON2_MEMORY_COST_KIB ?? '19456', 10),
+    timeCost: parseInt(process.env.ARGON2_TIME_COST ?? '2', 10),
+    parallelism: parseInt(process.env.ARGON2_PARALLELISM ?? '1', 10),
+  },
+  // Role codes treated as "privileged" for the forced-password-reset cutover
+  // (brief §1.3), in addition to anyone holding a permission ending in
+  // ":approve" (queried dynamically from RBAC — see
+  // privileged-users.query.ts). SUPER_ADMIN/BANK_ADMIN are this codebase's
+  // actual seeded roles; the brief's "Operations Manager" / "Compliance
+  // Officer" don't exist as distinct roles yet — flagged for LFB
+  // confirmation, not assumed.
   auth: {
-    maxFailedAttempts: parseInt(process.env.AUTH_MAX_FAILED_ATTEMPTS ?? '5', 10),
+    maxFailedAttempts: parseInt(
+      process.env.AUTH_MAX_FAILED_ATTEMPTS ?? '5',
+      10,
+    ),
     lockoutDurationMinutes: parseInt(
       process.env.AUTH_LOCKOUT_MINUTES ?? '15',
       10,
@@ -68,6 +89,21 @@ export default () => ({
       10,
     ),
     inviteExpiryHours: parseInt(process.env.AUTH_INVITE_HOURS ?? '72', 10),
+    privilegedRoleCodes: (
+      process.env.AUTH_PRIVILEGED_ROLE_CODES ?? 'SUPER_ADMIN,BANK_ADMIN'
+    )
+      .split(',')
+      .map((c) => c.trim())
+      .filter(Boolean),
+    // The date this migration's code went live — the 90-day backstop clock
+    // starts here for every account, not from each account's creation date.
+    argon2MigrationStartDate:
+      process.env.ARGON2_MIGRATION_START_DATE ?? '2026-08-16',
+    argon2BackstopDays: parseInt(process.env.ARGON2_BACKSTOP_DAYS ?? '90', 10),
+    argon2BackstopWarningDays: parseInt(
+      process.env.ARGON2_BACKSTOP_WARNING_DAYS ?? '7',
+      10,
+    ),
     mfaEncryptionKey:
       process.env.MFA_ENCRYPTION_KEY ??
       '0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef',

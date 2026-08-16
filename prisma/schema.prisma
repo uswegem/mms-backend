@@ -19,6 +19,16 @@ enum UserStatus {
   @@map("user_status")
 }
 
+/// bcrypt -> Argon2id migration (see docs/architecture-decisions).
+/// Explicit column rather than inferring from hash prefix at read time, so
+/// migration-status reporting is a plain query, not string parsing.
+enum PasswordAlgo {
+  BCRYPT
+  ARGON2ID
+
+  @@map("password_algo")
+}
+
 enum MerchantStatus {
   DRAFT
   PENDING_REVIEW
@@ -334,8 +344,25 @@ model UserInvitation {
 }
 
 model AuthCredential {
-  userId            String    @id @map("user_id") @db.Uuid
-  passwordHash      String    @map("password_hash") @db.VarChar(255)
+  userId            String       @id @map("user_id") @db.Uuid
+  passwordHash      String       @map("password_hash") @db.VarChar(255)
+  /// Defaults to BCRYPT to correctly reflect every row that existed before
+  /// the Argon2id migration shipped; every write path that produces a fresh
+  /// hash (login rehash, reset, new-user creation) sets ARGON2ID explicitly
+  /// — the default is never relied on for "this is a new hash" semantics.
+  passwordAlgo      PasswordAlgo @default(BCRYPT) @map("password_algo")
+  /// Set when a BCRYPT hash is lazily rehashed to Argon2id on login, or when
+  /// a forced reset completes. Null means still on the original algorithm.
+  passwordMigratedAt DateTime?   @map("password_migrated_at") @db.Timestamptz(6)
+  /// When true, valid credentials are not enough to obtain a session — the
+  /// login flow routes to forced password reset instead. Set at Argon2id
+  /// migration cutover for privileged accounts, and by the 90-day backstop
+  /// job for any account still on BCRYPT past the deadline.
+  mustResetPassword Boolean      @default(false) @map("must_reset_password")
+  /// Set the first time the 90-day-backstop warning email goes out, so the
+  /// daily job sends it once per user instead of every run during the
+  /// warning window.
+  passwordResetWarnedAt DateTime? @map("password_reset_warned_at") @db.Timestamptz(6)
   mfaSecretEnc      Bytes?    @map("mfa_secret_enc")
   mfaEnabled        Boolean   @default(false) @map("mfa_enabled")
   failedAttempts    Int       @default(0) @map("failed_attempts") @db.SmallInt

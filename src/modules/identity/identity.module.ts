@@ -8,7 +8,7 @@ import { AuthCredentialRepository } from './infrastructure/persistence/auth-cred
 import { RefreshTokenRepository } from './infrastructure/persistence/refresh-token.repository';
 import { PasswordResetRepository } from './infrastructure/persistence/password-reset.repository';
 import { LoginAttemptRepository } from './infrastructure/persistence/login-attempt.repository';
-import { BcryptPasswordHasherService } from './infrastructure/services/bcrypt-password-hasher.service';
+import { PasswordHasherService } from './infrastructure/services/password-hasher.service';
 import { TotpMfaService } from './infrastructure/services/totp-mfa.service';
 import { JwtTokenService } from './infrastructure/services/jwt-token.service';
 import { EnrichedAuthUserService } from './infrastructure/services/enriched-auth-user.service';
@@ -24,6 +24,7 @@ import { ForgotPasswordHandler } from './application/handlers/forgot-password.ha
 import { ResetPasswordHandler } from './application/handlers/reset-password.handler';
 import { MfaSetupHandler } from './application/handlers/mfa-setup.handler';
 import { MfaVerifyHandler } from './application/handlers/mfa-verify.handler';
+import { PasswordMigrationBackstopJob } from './infrastructure/jobs/password-migration-backstop.job';
 
 const CommandHandlers = [
   LoginHandler,
@@ -47,9 +48,10 @@ const CommandHandlers = [
     LoginAttemptRepository,
     EnrichedAuthUserService,
     JwtStrategy,
-    { provide: PasswordHasherPort, useClass: BcryptPasswordHasherService },
+    { provide: PasswordHasherPort, useClass: PasswordHasherService },
     { provide: TokenServicePort, useClass: JwtTokenService },
     { provide: MfaServicePort, useClass: TotpMfaService },
+    PasswordMigrationBackstopJob,
     ...CommandHandlers,
   ],
   exports: [UserRepository, PasswordHasherPort],

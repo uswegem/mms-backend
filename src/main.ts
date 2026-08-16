@@ -23,9 +23,12 @@ async function bootstrap() {
         : undefined,
     }),
   );
-  app.useStaticAssets(join(process.cwd(), config.get<string>('qr.storagePath') ?? 'storage'), {
-    prefix: '/storage',
-  });
+  app.useStaticAssets(
+    join(process.cwd(), config.get<string>('qr.storagePath') ?? 'storage'),
+    {
+      prefix: '/storage',
+    },
+  );
   app.use(cookieParser());
   app.enableCors({
     origin: config.get<string>('cors.origin'),
