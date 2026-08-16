@@ -1,4 +1,4 @@
-/** Damm (Luhn mod 10 variant) check digit for 8-digit Lipa Namba / internal IDs. */
+/** Damm (Luhn mod 10 variant) check digit for Lipa Namba / fee control numbers. */
 const DAMM_TABLE: number[][] = [
   [0, 1, 2, 3, 4, 5, 6, 7, 8, 9],
   [1, 2, 3, 4, 0, 6, 7, 8, 9, 5],
@@ -32,7 +32,23 @@ export function buildEightDigitId(prefix: string, sequence: string): string {
 
 export function validateDamm(id8: string): boolean {
   if (!/^\d{8}$/.test(id8)) return false;
-  const digits = id8.slice(0, 7).split('').map((c) => parseInt(c, 10));
+  return validateDammDigits(id8);
+}
+
+/** Validates Damm check digit for any all-digit string (last digit = check). */
+export function validateDammDigits(value: string): boolean {
+  if (!/^\d{2,}$/.test(value)) return false;
+  const body = value.slice(0, -1);
+  const digits = body.split('').map((c) => parseInt(c, 10));
   const expected = dammCheckDigit(digits);
-  return parseInt(id8[7], 10) === expected;
+  return parseInt(value[value.length - 1], 10) === expected;
+}
+
+/** Appends a Damm check digit to a numeric body. */
+export function appendDammCheckDigit(body: string): string {
+  if (!/^\d+$/.test(body)) {
+    throw new Error('Damm body must be numeric');
+  }
+  const digits = body.split('').map((c) => parseInt(c, 10));
+  return `${body}${dammCheckDigit(digits)}`;
 }
