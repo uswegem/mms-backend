@@ -8,6 +8,7 @@ import { PaymentChannel, PaymentStatus } from '@prisma/client';
 import { AliasRepository } from '@modules/alias/infrastructure/persistence/alias.repository';
 import { PaymentEventsPublisher } from '@modules/realtime/payment-events.port';
 import { AuditLogService } from '@infrastructure/audit/services/audit-log.service';
+import { TransactionLimitPolicyService } from '@modules/transaction-limits/application/services/transaction-limit-policy.service';
 import {
   TransactionsRepository,
   LedgerFilters,
@@ -27,6 +28,7 @@ export class TransactionsService {
     private readonly tips: TipsPaymentProvider,
     private readonly events: PaymentEventsPublisher,
     private readonly audit: AuditLogService,
+    private readonly limits: TransactionLimitPolicyService,
   ) {}
 
   /**
@@ -61,11 +63,31 @@ export class TransactionsService {
       );
     }
 
-    const status =
+    let status: PaymentStatus =
       dto.simulateOutcome === 'FAILED'
         ? PaymentStatus.FAILED
         : PaymentStatus.SUCCESS;
     const now = new Date();
+
+    // Brief §4.3.3: enforce the merchant's kycTier transaction-limit policy
+    // at payment-processing time. Money has already moved at the TIPS/
+    // interbank layer by the time this webhook arrives — MMS cannot
+    // reverse that — so a breach doesn't mean rejecting the webhook; it
+    // means not treating the payment as normally settled. See
+    // PaymentStatus.LIMIT_EXCEEDED's doc comment in schema.prisma.
+    let limitBreach: string | undefined;
+    if (status === PaymentStatus.SUCCESS) {
+      const check = await this.limits.checkAndReserve(
+        merchant.id,
+        merchant.kycTier,
+        dto.amount,
+        now,
+      );
+      if (!check.allowed) {
+        status = PaymentStatus.LIMIT_EXCEEDED;
+        limitBreach = check.breach;
+      }
+    }
 
     const payment = await this.transactions.create({
       acquirerId: merchant.acquirerId,
@@ -83,13 +105,18 @@ export class TransactionsService {
 
     await this.audit.record({
       actorId: null, // TIPS-initiated, not a human actor
-      action: 'PAYMENT_RECEIVED',
+      action:
+        status === PaymentStatus.LIMIT_EXCEEDED
+          ? 'PAYMENT_LIMIT_EXCEEDED'
+          : 'PAYMENT_RECEIVED',
       entityType: 'payment',
       entityId: payment.id,
       metadata: {
         tipsEndToEndId: dto.tipsEndToEndId,
         alias: dto.alias,
         status,
+        kycTier: merchant.kycTier,
+        ...(limitBreach ? { limitBreach } : {}),
       },
     });
 

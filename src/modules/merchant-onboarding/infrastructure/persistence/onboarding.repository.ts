@@ -3,6 +3,7 @@ import {
   AmlResult,
   DocumentType,
   KycStatus,
+  KycTier,
   LegalEntityType,
   MerchantStatus,
   OnboardingStatus,
@@ -151,6 +152,9 @@ export class OnboardingRepository {
           branch: data.branch,
           sourceChannel: data.sourceChannel,
           isSchool: data.isSchool,
+          // Brief §4.3.3: TIER_1 (online-only lighter-KYC) has no
+          // onboarding path built yet, so this is the full current rule.
+          kycTier: data.isSchool ? KycTier.TIER_3 : KycTier.TIER_2,
           status: MerchantStatus.DRAFT,
           createdBy: data.createdBy,
           profile: {

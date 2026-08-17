@@ -2,6 +2,7 @@ import { Injectable } from '@nestjs/common';
 import {
   DocumentType,
   KycStatus,
+  KycTier,
   MerchantStatus,
   Prisma,
 } from '@prisma/client';
@@ -99,6 +100,9 @@ export class MerchantsRepository {
             mcc: data.mcc,
             taxId: data.taxId,
             isSchool: data.isSchool ?? false,
+            // Brief §4.3.3: TIER_1 (online-only lighter-KYC) has no
+            // onboarding path built yet, so this is the full current rule.
+            kycTier: data.isSchool ? KycTier.TIER_3 : KycTier.TIER_2,
             status: MerchantStatus.DRAFT,
             createdBy: data.createdBy,
             profile: {

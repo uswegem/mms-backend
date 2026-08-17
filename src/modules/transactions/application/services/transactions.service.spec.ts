@@ -5,7 +5,11 @@ import { TipsPaymentWebhookDto } from '../../presentation/dto/transaction.dto';
 
 describe('TransactionsService — payment ingestion', () => {
   function buildService(
-    overrides: { existing?: unknown; aliasResult?: unknown } = {},
+    overrides: {
+      existing?: unknown;
+      aliasResult?: unknown;
+      checkAndReserve?: unknown;
+    } = {},
   ) {
     const transactions = {
       findByTipsEndToEndId: jest
@@ -24,13 +28,24 @@ describe('TransactionsService — payment ingestion', () => {
           ? overrides.aliasResult
           : {
               type: 'merchant',
-              record: { merchant: { id: 'merchant-1', acquirerId: 'acq-1' } },
+              record: {
+                merchant: {
+                  id: 'merchant-1',
+                  acquirerId: 'acq-1',
+                  kycTier: 'TIER_2',
+                },
+              },
             },
       ),
     };
     const tips = { verifyWebhookSignature: jest.fn().mockReturnValue(true) };
     const events = { publishPaymentConfirmed: jest.fn() };
     const audit = { record: jest.fn().mockResolvedValue(undefined) };
+    const limits = {
+      checkAndReserve:
+        overrides.checkAndReserve ??
+        jest.fn().mockResolvedValue({ allowed: true, policy: {} }),
+    };
 
     const service = new TransactionsService(
       transactions as never,
@@ -38,8 +53,9 @@ describe('TransactionsService — payment ingestion', () => {
       tips as never,
       events,
       audit as never,
+      limits as never,
     );
-    return { service, transactions, aliases, tips, events, audit };
+    return { service, transactions, aliases, tips, events, audit, limits };
   }
 
   const dto: TipsPaymentWebhookDto = {
@@ -116,5 +132,53 @@ describe('TransactionsService — payment ingestion', () => {
       }),
     );
     expect(events.publishPaymentConfirmed).not.toHaveBeenCalled();
+  });
+
+  describe('kycTier transaction-limit enforcement (brief §4.3.3)', () => {
+    it("checks the limit policy against the receiving merchant's kycTier for an otherwise-SUCCESS confirmation", async () => {
+      const { service, limits } = buildService();
+      await service.recordConfirmation(dto, '{}', 'sig');
+
+      expect(limits.checkAndReserve).toHaveBeenCalledWith(
+        'merchant-1',
+        'TIER_2',
+        dto.amount,
+        expect.any(Date),
+      );
+    });
+
+    it('records the payment as LIMIT_EXCEEDED rather than SUCCESS when the policy check disallows it, and does not publish a confirmed event', async () => {
+      const checkAndReserve = jest
+        .fn()
+        .mockResolvedValue({ allowed: false, breach: 'DAILY', policy: {} });
+      const { service, transactions, events, audit } = buildService({
+        checkAndReserve,
+      });
+
+      const result = await service.recordConfirmation(dto, '{}', 'sig');
+
+      expect(transactions.create).toHaveBeenCalledWith(
+        expect.objectContaining({ status: PaymentStatus.LIMIT_EXCEEDED }),
+      );
+      expect(result).toMatchObject({ status: PaymentStatus.LIMIT_EXCEEDED });
+      expect(events.publishPaymentConfirmed).not.toHaveBeenCalled();
+      const auditCall = (audit.record.mock.calls as unknown[][])[0][0] as {
+        action: string;
+        metadata: Record<string, unknown>;
+      };
+      expect(auditCall.action).toBe('PAYMENT_LIMIT_EXCEEDED');
+      expect(auditCall.metadata.limitBreach).toBe('DAILY');
+    });
+
+    it('does not consult the limit policy at all for a simulateOutcome=FAILED confirmation', async () => {
+      const { service, limits } = buildService();
+      await service.recordConfirmation(
+        { ...dto, simulateOutcome: 'FAILED' },
+        '{}',
+        'sig',
+      );
+
+      expect(limits.checkAndReserve).not.toHaveBeenCalled();
+    });
   });
 });

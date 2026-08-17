@@ -216,8 +216,26 @@ enum PaymentStatus {
   REVERSED
   DISPUTED
   REFUND_PENDING
+  /// Confirmed by TIPS (money has already moved between banks — MMS cannot
+  /// reverse an interbank transfer via this webhook) but the receiving
+  /// merchant's kycTier transaction-limit policy was breached. Held out of
+  /// normal settlement pending compliance/ops review rather than either
+  /// silently settling it or pretending the confirmation never arrived.
+  LIMIT_EXCEEDED
 
   @@map("payment_status")
+}
+
+/// Brief §4.3.3: three KYC tiers, set at onboarding based on entity type and
+/// KYC path taken. TIER_1 (online-only lighter-KYC) has no onboarding path
+/// built yet in this codebase — nothing currently assigns it — so every
+/// Merchant row today resolves to TIER_2 or TIER_3 via the isSchool split.
+enum KycTier {
+  TIER_1
+  TIER_2
+  TIER_3
+
+  @@map("kyc_tier")
 }
 
 enum PaymentChannel {
@@ -527,6 +545,12 @@ model Merchant {
   branch      String?        @db.VarChar(100)
   sourceChannel String?      @map("source_channel") @db.VarChar(50)
   isSchool    Boolean        @default(false) @map("is_school")
+  /// Brief §4.3.3. Defaulted at the DB level to TIER_2 only as a NOT NULL
+  /// safety net — every merchant-creation write path (ad-hoc admin create
+  /// and the onboarding pipeline) sets this explicitly from isSchool
+  /// (TIER_3 for schools, TIER_2 otherwise) rather than relying on the
+  /// column default.
+  kycTier     KycTier        @default(TIER_2) @map("kyc_tier")
   onboardedAt DateTime?      @map("onboarded_at") @db.Timestamptz(6)
   activatedAt DateTime?      @map("activated_at") @db.Timestamptz(6)
   createdAt   DateTime       @default(now()) @map("created_at") @db.Timestamptz(6)
@@ -957,6 +981,25 @@ model MerchantStore {
   @@unique([merchantId, storeCode])
   @@index([merchantId])
   @@map("merchant_stores")
+}
+
+/// Brief §4.3.3: per-tier transaction limits, configurable (via
+/// PATCH /transaction-limits/:tier) rather than hard-coded. Seeded with
+/// conservative placeholder figures — the real TZS amounts are explicitly
+/// not yet set (open question: LFB Risk/Compliance owns this number, not
+/// engineering) and are expected to be a config change, not a code change,
+/// once confirmed.
+model TransactionLimitPolicy {
+  id                  String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  tier                KycTier  @unique
+  perTransactionLimit Decimal  @map("per_transaction_limit") @db.Decimal(18, 2)
+  dailyLimit          Decimal  @map("daily_limit") @db.Decimal(18, 2)
+  monthlyLimit        Decimal  @map("monthly_limit") @db.Decimal(18, 2)
+  currency            String   @default("TZS") @db.Char(3)
+  updatedAt           DateTime @default(now()) @updatedAt @map("updated_at") @db.Timestamptz(6)
+  updatedBy           String?  @map("updated_by") @db.Uuid
+
+  @@map("transaction_limit_policies")
 }
 
 model MerchantSettlementConfig {

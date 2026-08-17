@@ -3,6 +3,7 @@ import { DatabaseModule } from '@infrastructure/database/database.module';
 import { AuditModule } from '@infrastructure/audit/audit.module';
 import { AliasModule } from '@modules/alias/alias.module';
 import { RealtimeModule } from '@modules/realtime/realtime.module';
+import { TransactionLimitsModule } from '@modules/transaction-limits/transaction-limits.module';
 import { MerchantScopeService } from '@shared/application/services/merchant-scope.service';
 import { TransactionsRepository } from './infrastructure/persistence/transactions.repository';
 import { TipsPaymentProvider } from './application/ports/tips-payment.port';
@@ -13,7 +14,13 @@ import { TransactionsController } from './presentation/http/transactions.control
 
 /** Bounded context: Transactions / Payments */
 @Module({
-  imports: [DatabaseModule, AuditModule, AliasModule, RealtimeModule],
+  imports: [
+    DatabaseModule,
+    AuditModule,
+    AliasModule,
+    RealtimeModule,
+    TransactionLimitsModule,
+  ],
   controllers: [TransactionsController],
   providers: [
     TransactionsRepository,

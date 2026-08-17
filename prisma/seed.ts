@@ -90,6 +90,55 @@ async function seedReferenceData() {
   );
 }
 
+// ─── Transaction limit policies (brief §4.3.3) ────────────────────────────
+// PLACEHOLDER FIGURES — NOT REAL. The brief is explicit that actual TZS
+// limits are Risk/Compliance's call, not engineering's, and are not yet
+// set (open question #10). These exist only so the enforcement mechanism
+// has something to enforce against in dev/UAT; every value here needs
+// replacing with LFB Risk/Compliance-confirmed figures before production,
+// as a config update (this table), not a code change.
+const TRANSACTION_LIMIT_POLICIES: Array<{
+  tier: 'TIER_1' | 'TIER_2' | 'TIER_3';
+  perTransactionLimit: number;
+  dailyLimit: number;
+  monthlyLimit: number;
+}> = [
+  // TIER_1 — online-only, lighter KYC: no onboarding path built yet, kept
+  // deliberately conservative since it's the least-verified merchant class.
+  {
+    tier: 'TIER_1',
+    perTransactionLimit: 500_000,
+    dailyLimit: 1_000_000,
+    monthlyLimit: 5_000_000,
+  },
+  // TIER_2 — standard Sole Proprietor / Company (the default for every
+  // non-school merchant onboarded today).
+  {
+    tier: 'TIER_2',
+    perTransactionLimit: 5_000_000,
+    dailyLimit: 20_000_000,
+    monthlyLimit: 100_000_000,
+  },
+  // TIER_3 — schools/institutional (higher ceiling: termly fee volume can
+  // legitimately be large relative to a single merchant's daily takings).
+  {
+    tier: 'TIER_3',
+    perTransactionLimit: 10_000_000,
+    dailyLimit: 50_000_000,
+    monthlyLimit: 300_000_000,
+  },
+];
+
+async function seedTransactionLimitPolicies() {
+  for (const policy of TRANSACTION_LIMIT_POLICIES) {
+    await prisma.transactionLimitPolicy.upsert({
+      where: { tier: policy.tier },
+      update: {}, // never overwrite a value ops may have already tuned
+      create: policy,
+    });
+  }
+}
+
 // Overridable via env so a real deploy (uat/prod) can bootstrap with its own
 // credential instead of this hardcoded dev default. Bootstrap-only: see the
 // authCredential upsert below, which never overwrites an existing hash — a
@@ -465,6 +514,7 @@ const ROLES: Array<{
 
 async function main() {
   await seedReferenceData();
+  await seedTransactionLimitPolicies();
 
   const acquirer = await prisma.acquirer.upsert({
     where: { code: 'DEMO' },
