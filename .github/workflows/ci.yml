@@ -1,0 +1,141 @@
+name: CI - Backend (mms-backend)
+
+# Runs automatically on PRs targeting main, and can also be triggered manually.
+# For this to actually gate merges, configure branch protection on `main` in
+# this repo's GitHub settings to require the three jobs below as passing
+# status checks, plus at least one PR approval.
+on:
+  workflow_dispatch:
+    inputs:
+      run_e2e:
+        description: "Run e2e test suite (in addition to unit tests)"
+        required: false
+        default: true
+        type: boolean
+  pull_request:
+    # This repo has no `main` — `development` is the default branch
+    # (origin/HEAD points at it) and `um_dev` is the active integration
+    # branch this session has been pushing to. Adjust here (and in the
+    # branch-protection setting) if the intended default branch changes.
+    branches: [development, um_dev]
+
+jobs:
+  lint-typecheck-test-build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: mms
+          POSTGRES_PASSWORD: mms
+          POSTGRES_DB: mms_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
+      redis:
+        image: redis:7
+        ports:
+          - 6379:6379
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
+    env:
+      NODE_ENV: test
+      DATABASE_URL: postgresql://mms:mms@localhost:5432/mms_test
+      REDIS_URL: redis://localhost:6379
+      # Auth is RS256-via-Vault-Transit now (no raw JWT key pair to hold as
+      # a secret here). No VAULT_ADDR/VAULT_TOKEN is set for this job — every
+      # unit test that touches signing/verification runs against a mocked
+      # Vault, not a live one. vault-live.integration.spec.ts is the one
+      # test that wants a real Vault; it self-skips when it can't reach one,
+      # which is the case in this job (no `vault` service defined below).
+      # Add one (see mms-backend/docker-compose.yml for the image/config)
+      # if that test should actually run in CI instead of skipping.
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: "npm"
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Lint
+        run: npm run lint
+
+      - name: Type check
+        run: npm run typecheck --if-present
+
+      - name: Prisma generate
+        run: npx prisma generate
+
+      - name: Run database migrations
+        run: npx prisma migrate deploy
+
+      - name: Unit tests
+        run: npm run test -- --coverage
+
+      - name: E2E tests
+        if: ${{ inputs.run_e2e != false }}
+        run: npm run test:e2e --if-present
+
+      - name: Build
+        run: npm run build
+
+      - name: Dependency audit (blocking)
+        run: npm audit --audit-level=high
+
+      - name: Upload coverage report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: backend-coverage
+          path: coverage/
+          retention-days: 14
+
+  sast:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions:
+      security-events: write
+      contents: read
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Initialize CodeQL
+        uses: github/codeql-action/init@v3
+        with:
+          languages: javascript-typescript
+
+      - name: Perform CodeQL analysis
+        uses: github/codeql-action/analyze@v3
+
+  secret-scan:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Run gitleaks
+        uses: gitleaks/gitleaks-action@v2
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
