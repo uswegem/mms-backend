@@ -5,6 +5,7 @@ import { ConfigService } from '@nestjs/config';
 import { OnboardingRepository } from '../../infrastructure/persistence/onboarding.repository';
 import { OnboardingDuplicateService } from '../services/onboarding-duplicate.service';
 import { OnboardingWorkflowService } from '../services/onboarding-workflow.service';
+import { ReferenceDataService } from '@modules/reference-data/application/services/reference-data.service';
 import { toOnboardingResponse } from '../mappers/onboarding-response.mapper';
 import {
   OnboardingForbiddenException,
@@ -168,12 +169,21 @@ export class AddBeneficialOwnerHandler
 export class AssignSettlementAccountHandler
   implements ICommandHandler<AssignSettlementAccountCommand>
 {
-  constructor(private readonly onboarding: OnboardingRepository) {}
+  constructor(
+    private readonly onboarding: OnboardingRepository,
+    private readonly referenceData: ReferenceDataService,
+  ) {}
 
   async execute(command: AssignSettlementAccountCommand) {
     const existing = await this.onboarding.findById(command.applicationId);
     if (!existing) throw new OnboardingNotFoundException(command.applicationId);
     assertAcquirer(command.actor, existing.acquirerId);
+    // bankCode is validated as a SWIFT/BIC code against the reference bank
+    // catalog — the only standardized bank identifier available in the
+    // reference dataset. If bankCode is meant to carry a different code
+    // scheme (e.g. an internal TIPS/BOT bank registry code), this
+    // assumption needs correcting.
+    await this.referenceData.validateBankCode(command.dto.bankCode);
     const account = await this.onboarding.assignSettlementAccount(
       existing.merchantId,
       { ...command.dto, createdBy: command.actor.sub },

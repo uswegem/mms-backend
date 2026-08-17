@@ -6,6 +6,7 @@ import { MakerCheckerModule } from '@modules/maker-checker/maker-checker.module'
 import { CbsModule } from '@modules/cbs/cbs.module';
 import { AliasModule } from '@modules/alias/alias.module';
 import { QrModule } from '@modules/qr/qr.module';
+import { ReferenceDataModule } from '@modules/reference-data/reference-data.module';
 import { ONBOARDING_APPROVAL_PORT } from '@modules/maker-checker/application/ports/onboarding-approval.port';
 import { OnboardingController } from './presentation/http/onboarding.controller';
 import { MerchantOnboardingAliasController } from './presentation/http/merchant-onboarding-alias.controller';
@@ -28,6 +29,7 @@ import { ONBOARDING_PIPELINE_HANDLERS } from './application/handlers/onboarding-
     CbsModule,
     AliasModule,
     QrModule,
+    ReferenceDataModule,
   ],
   controllers: [OnboardingController, MerchantOnboardingAliasController],
   providers: [

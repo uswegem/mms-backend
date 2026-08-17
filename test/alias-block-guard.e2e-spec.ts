@@ -73,6 +73,7 @@ describe('Alias block/entity-type DB guard (e2e)', () => {
           merchantId,
           admissionNo: `GUARD-TEST-${Date.now()}`,
           fullName: 'Alias Guard Test Student',
+          guardianPhone: '255700000001',
         },
       });
       await tx.studentAlias.create({
@@ -113,6 +114,7 @@ describe('Alias block/entity-type DB guard (e2e)', () => {
           merchantId,
           admissionNo: `GUARD-TEST-OK-${Date.now()}`,
           fullName: 'Alias Guard Test Student OK',
+          guardianPhone: '255700000001',
         },
       });
       const alias = await tx.studentAlias.create({

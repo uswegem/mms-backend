@@ -4,6 +4,7 @@ import { MerchantsRepository } from '../../infrastructure/persistence/merchants.
 import { MerchantScopeService } from '../services/merchant-scope.service';
 import { AuditLogService } from '@infrastructure/audit/services/audit-log.service';
 import { Permission } from '@infrastructure/auth/rbac/enums/permission.enum';
+import { ReferenceDataService } from '@modules/reference-data/application/services/reference-data.service';
 import { toMerchantResponse } from '../mappers/merchant-response.mapper';
 
 @CommandHandler(CreateMerchantCommand)
@@ -14,10 +15,22 @@ export class CreateMerchantHandler
     private readonly merchants: MerchantsRepository,
     private readonly scope: MerchantScopeService,
     private readonly audit: AuditLogService,
+    private readonly referenceData: ReferenceDataService,
   ) {}
 
   async execute(command: CreateMerchantCommand) {
     this.scope.requirePermission(command.actor, Permission.MERCHANT_WRITE);
+
+    // region/district/ward/postalCode were previously free text with no
+    // server-side check at all — validated here before any write so an
+    // invalid combination is rejected up front, not discovered later by
+    // whatever eventually consumes it (e.g. TANQR tag 60/61 generation).
+    await this.referenceData.validateLocation({
+      region: command.region,
+      district: command.district,
+      ward: command.ward,
+      postalCode: command.postalCode,
+    });
 
     const merchant = await this.merchants.create({
       acquirerId: command.actor.acquirerId,

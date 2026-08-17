@@ -19,6 +19,7 @@ import { ConfigurationModule } from './configuration/configuration.module';
 import { TipsModule } from './tips/tips.module';
 import { CbsModule } from './cbs/cbs.module';
 import { MonitoringModule } from './monitoring/monitoring.module';
+import { ReferenceDataModule } from './reference-data/reference-data.module';
 
 /**
  * Registers all bounded-context modules (structure only — no business logic).
@@ -45,6 +46,7 @@ import { MonitoringModule } from './monitoring/monitoring.module';
     TipsModule,
     CbsModule,
     MonitoringModule,
+    ReferenceDataModule,
   ],
 })
 export class ModulesModule {}

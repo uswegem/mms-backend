@@ -1,7 +1,94 @@
 import { PrismaClient } from '@prisma/client';
 import * as bcrypt from 'bcrypt';
+import { readFileSync } from 'fs';
+import { join } from 'path';
 
 const prisma = new PrismaClient();
+
+// ─── Reference data (Milestone B) ─────────────────────────────────────────
+// Region -> District -> Ward -> postcode hierarchy and bank/SWIFT catalog,
+// sourced from a real public Tanzania administrative-locations dataset
+// (see prisma/reference-data/tanzania-locations.json for provenance).
+
+interface LocationWard {
+  name: string;
+  postcode: string;
+}
+interface LocationDistrict {
+  name: string;
+  wards: LocationWard[];
+}
+interface LocationRegion {
+  region: string;
+  districts: LocationDistrict[];
+}
+interface BankEntry {
+  name: string;
+  swiftCode: string;
+}
+
+async function seedReferenceData() {
+  // One-time load: this dataset is administrative-boundary data that does
+  // not change deploy-to-deploy, and reseeding thousands of ward rows on
+  // every run (deploy.yml runs this seed unconditionally on every deploy)
+  // would be wasted work at best. Skip entirely once any region exists.
+  const alreadySeeded = (await prisma.referenceRegion.count()) > 0;
+  if (alreadySeeded) {
+    console.log('  Reference data: already seeded, skipping');
+    return;
+  }
+
+  const locations = JSON.parse(
+    readFileSync(
+      join(__dirname, 'reference-data', 'tanzania-locations.json'),
+      'utf8',
+    ),
+  ) as LocationRegion[];
+  const banks = JSON.parse(
+    readFileSync(
+      join(__dirname, 'reference-data', 'tanzania-banks.json'),
+      'utf8',
+    ),
+  ) as BankEntry[];
+
+  let districtCount = 0;
+  let wardCount = 0;
+
+  for (const regionData of locations) {
+    const region = await prisma.referenceRegion.create({
+      data: { name: regionData.region },
+    });
+
+    for (const districtData of regionData.districts) {
+      const district = await prisma.referenceDistrict.create({
+        data: { regionId: region.id, name: districtData.name },
+      });
+      districtCount += 1;
+
+      if (districtData.wards.length > 0) {
+        await prisma.referenceWard.createMany({
+          data: districtData.wards.map((w) => ({
+            districtId: district.id,
+            name: w.name,
+            postcode: w.postcode,
+          })),
+          skipDuplicates: true,
+        });
+        wardCount += districtData.wards.length;
+      }
+    }
+  }
+
+  await prisma.referenceBank.createMany({
+    data: banks.map((b) => ({ name: b.name, swiftCode: b.swiftCode })),
+    skipDuplicates: true,
+  });
+
+  console.log(
+    `  Reference data: ${locations.length} regions, ${districtCount} districts, ` +
+      `${wardCount} wards, ${banks.length} banks`,
+  );
+}
 
 // Overridable via env so a real deploy (uat/prod) can bootstrap with its own
 // credential instead of this hardcoded dev default. Bootstrap-only: see the
@@ -377,6 +464,8 @@ const ROLES: Array<{
 ];
 
 async function main() {
+  await seedReferenceData();
+
   const acquirer = await prisma.acquirer.upsert({
     where: { code: 'DEMO' },
     update: {

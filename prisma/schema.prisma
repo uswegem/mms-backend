@@ -626,6 +626,63 @@ model MerchantProfile {
   @@map("merchant_profiles")
 }
 
+// ─── Reference data (Milestone B) ──────────────────────────────────────────
+// Authoritative Region → District → Ward → postcode hierarchy and bank/SWIFT
+// catalog, seeded from a real public Tanzania administrative-locations
+// dataset. Backs server-side validation of MerchantProfile's region/
+// district/ward/postalCode fields and SettlementAccount.bankCode — both of
+// which were previously free text with no validation at all — and is the
+// data TANQR tag 60/61 (city/postal code) ultimately depends on being real.
+model ReferenceRegion {
+  id        String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  name      String   @unique @db.VarChar(50)
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  districts ReferenceDistrict[]
+
+  @@map("reference_regions")
+}
+
+model ReferenceDistrict {
+  id       String @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  regionId String @map("region_id") @db.Uuid
+  name     String @db.VarChar(50)
+
+  region ReferenceRegion @relation(fields: [regionId], references: [id], onDelete: Cascade)
+  wards  ReferenceWard[]
+
+  @@unique([regionId, name])
+  @@map("reference_districts")
+}
+
+model ReferenceWard {
+  id         String @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  districtId String @map("district_id") @db.Uuid
+  name       String @db.VarChar(50)
+  // VarChar(6), not Char(5) like MerchantProfile.postalCode: the source
+  // dataset has exactly one ward (Morogoro/Malinyi/Kilosampepo) with a
+  // 6-digit postcode ("678010"). Stored faithfully rather than truncated —
+  // ReferenceDataService.validateLocation() flags it explicitly as a known
+  // data anomaly if a merchant is ever registered against that ward, rather
+  // than let it fail as an opaque DB error against the narrower column.
+  postcode String @db.VarChar(6)
+
+  district ReferenceDistrict @relation(fields: [districtId], references: [id], onDelete: Cascade)
+
+  @@unique([districtId, name])
+  @@index([postcode])
+  @@map("reference_wards")
+}
+
+model ReferenceBank {
+  id        String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  name      String   @unique @db.VarChar(100)
+  swiftCode String   @unique @map("swift_code") @db.VarChar(11)
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  @@map("reference_banks")
+}
+
 model MerchantKyc {
   merchantId  String    @id @map("merchant_id") @db.Uuid
   status      KycStatus @default(PENDING)

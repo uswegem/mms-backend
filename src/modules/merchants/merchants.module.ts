@@ -3,6 +3,7 @@ import { CqrsModule } from '@nestjs/cqrs';
 import { AuthModule } from '@infrastructure/auth/auth.module';
 import { AuditModule } from '@infrastructure/audit/audit.module';
 import { MerchantStatusModule } from '@modules/merchant-status/merchant-status.module';
+import { ReferenceDataModule } from '@modules/reference-data/reference-data.module';
 import { MerchantsController } from './presentation/http/merchants.controller';
 import { MerchantsRepository } from './infrastructure/persistence/merchants.repository';
 import { MerchantScopeService } from './application/services/merchant-scope.service';
@@ -31,7 +32,13 @@ const CommandHandlers = [
 ];
 
 @Module({
-  imports: [CqrsModule, AuthModule, AuditModule, MerchantStatusModule],
+  imports: [
+    CqrsModule,
+    AuthModule,
+    AuditModule,
+    MerchantStatusModule,
+    ReferenceDataModule,
+  ],
   controllers: [MerchantsController],
   providers: [
     MerchantsRepository,
