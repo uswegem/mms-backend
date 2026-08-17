@@ -6,6 +6,7 @@ import {
 } from '@nestjs/common';
 import { PaymentChannel, PaymentStatus } from '@prisma/client';
 import { AliasRepository } from '@modules/alias/infrastructure/persistence/alias.repository';
+import { PaymentEventsPublisher } from '@modules/realtime/payment-events.port';
 import { AuditLogService } from '@infrastructure/audit/services/audit-log.service';
 import {
   TransactionsRepository,
@@ -24,6 +25,7 @@ export class TransactionsService {
     private readonly transactions: TransactionsRepository,
     private readonly aliases: AliasRepository,
     private readonly tips: TipsPaymentProvider,
+    private readonly events: PaymentEventsPublisher,
     private readonly audit: AuditLogService,
   ) {}
 
@@ -91,10 +93,19 @@ export class TransactionsService {
       },
     });
 
-    // TODO(§4.5 real-time confirmation): publish a payment.confirmed event
-    // once a WebSocket gateway exists to push it to the merchant portal.
-    // Not built yet — the ledger read path below is the only way to see a
-    // new payment today.
+    if (status === PaymentStatus.SUCCESS) {
+      this.events.publishPaymentConfirmed(merchant.id, {
+        paymentId: payment.id,
+        tipsEndToEndId: payment.tipsEndToEndId,
+        amount: payment.amount.toString(),
+        currency: payment.currency,
+        channel: payment.channel,
+        storeId: payment.storeId,
+        terminalId: payment.terminalId,
+        payerFsp: payment.payerFsp,
+        receivedAt: payment.receivedAt.toISOString(),
+      });
+    }
 
     return payment;
   }

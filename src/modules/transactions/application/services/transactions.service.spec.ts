@@ -29,15 +29,17 @@ describe('TransactionsService — payment ingestion', () => {
       ),
     };
     const tips = { verifyWebhookSignature: jest.fn().mockReturnValue(true) };
+    const events = { publishPaymentConfirmed: jest.fn() };
     const audit = { record: jest.fn().mockResolvedValue(undefined) };
 
     const service = new TransactionsService(
       transactions as never,
       aliases as never,
       tips as never,
+      events,
       audit as never,
     );
-    return { service, transactions, aliases, tips, audit };
+    return { service, transactions, aliases, tips, events, audit };
   }
 
   const dto: TipsPaymentWebhookDto = {
@@ -46,8 +48,8 @@ describe('TransactionsService — payment ingestion', () => {
     tipsEndToEndId: 'TIPS-ABC123',
   };
 
-  it('creates a SUCCESS payment for a valid confirmation', async () => {
-    const { service, transactions } = buildService();
+  it('creates a SUCCESS payment for a valid confirmation and publishes a live event', async () => {
+    const { service, transactions, events } = buildService();
     const result = await service.recordConfirmation(dto, '{}', 'sig');
 
     expect(transactions.create).toHaveBeenCalledWith(
@@ -60,15 +62,23 @@ describe('TransactionsService — payment ingestion', () => {
       }),
     );
     expect(result).toMatchObject({ id: 'payment-1' });
+    expect(events.publishPaymentConfirmed).toHaveBeenCalledWith(
+      'merchant-1',
+      expect.objectContaining({
+        paymentId: 'payment-1',
+        tipsEndToEndId: 'TIPS-ABC123',
+      }),
+    );
   });
 
-  it('is idempotent on tipsEndToEndId — a retried webhook does not double-create', async () => {
+  it('is idempotent on tipsEndToEndId — a retried webhook does not double-create or re-publish', async () => {
     const existing = { id: 'payment-1', tipsEndToEndId: 'TIPS-ABC123' };
-    const { service, transactions } = buildService({ existing });
+    const { service, transactions, events } = buildService({ existing });
 
     const result = await service.recordConfirmation(dto, '{}', 'sig');
 
     expect(transactions.create).not.toHaveBeenCalled();
+    expect(events.publishPaymentConfirmed).not.toHaveBeenCalled();
     expect(result).toBe(existing);
   });
 
@@ -91,8 +101,8 @@ describe('TransactionsService — payment ingestion', () => {
     expect(transactions.create).not.toHaveBeenCalled();
   });
 
-  it('honours simulateOutcome=FAILED for dev/test scenarios', async () => {
-    const { service, transactions } = buildService();
+  it('honours simulateOutcome=FAILED for dev/test scenarios, and does not publish a confirmed event for it', async () => {
+    const { service, transactions, events } = buildService();
     await service.recordConfirmation(
       { ...dto, simulateOutcome: 'FAILED' },
       '{}',
@@ -105,5 +115,6 @@ describe('TransactionsService — payment ingestion', () => {
         tipsSettledAt: undefined,
       }),
     );
+    expect(events.publishPaymentConfirmed).not.toHaveBeenCalled();
   });
 });

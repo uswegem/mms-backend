@@ -56,6 +56,6 @@ const CommandHandlers = [
     PasswordMigrationBackstopJob,
     ...CommandHandlers,
   ],
-  exports: [UserRepository, PasswordHasherPort],
+  exports: [UserRepository, PasswordHasherPort, TokenServicePort],
 })
 export class IdentityModule {}

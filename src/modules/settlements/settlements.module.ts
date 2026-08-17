@@ -1,6 +1,7 @@
 import { Module } from '@nestjs/common';
 import { DatabaseModule } from '@infrastructure/database/database.module';
 import { AuditModule } from '@infrastructure/audit/audit.module';
+import { MerchantScopeService } from '@shared/application/services/merchant-scope.service';
 import { SettlementsRepository } from './infrastructure/persistence/settlements.repository';
 import { CbsPostingProvider } from './application/ports/cbs-posting.port';
 import { MockCbsPostingProvider } from './infrastructure/services/mock-cbs-posting.provider';
@@ -17,6 +18,7 @@ import { SettlementsController } from './presentation/http/settlements.controlle
     { provide: CbsPostingProvider, useClass: MockCbsPostingProvider },
     SettlementsService,
     SettlementSweepJob,
+    MerchantScopeService,
   ],
   exports: [SettlementsRepository],
 })

@@ -321,6 +321,10 @@ const ROLES: Array<{
       'onboarding:read',
       'onboarding:write',
       'onboarding:submit',
+      'transactions:read',
+      'settlements:read',
+      'qr:read',
+      'alias:read',
     ],
   },
   {
@@ -332,6 +336,9 @@ const ROLES: Array<{
       'user:read',
       'merchant:read',
       'merchant:kyc:read',
+      'transactions:read',
+      'qr:read',
+      'alias:read',
     ],
   },
   {
@@ -359,6 +366,8 @@ const ROLES: Array<{
       'onboarding:read',
       'onboarding:write',
       'onboarding:submit',
+      'transactions:read',
+      'settlements:read',
     ],
   },
 ];
