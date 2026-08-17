@@ -3,8 +3,12 @@ import * as bcrypt from 'bcrypt';
 
 const prisma = new PrismaClient();
 
-const ADMIN_EMAIL = 'admin@mms.local';
-const ADMIN_PASSWORD = 'Admin@12345678';
+// Overridable via env so a real deploy (uat/prod) can bootstrap with its own
+// credential instead of this hardcoded dev default. Bootstrap-only: see the
+// authCredential upsert below, which never overwrites an existing hash — a
+// password rotated by ops after first deploy survives every later reseed.
+const ADMIN_EMAIL = process.env.SEED_ADMIN_EMAIL ?? 'admin@mms.local';
+const ADMIN_PASSWORD = process.env.SEED_ADMIN_PASSWORD ?? 'Admin@12345678';
 
 const PERMISSIONS = [
   { code: 'auth:login', module: 'auth', description: 'Login and logout' },
@@ -467,12 +471,19 @@ async function main() {
     create: { userId: user.id },
   });
 
-  const passwordHash = await bcrypt.hash(ADMIN_PASSWORD, 12);
-  await prisma.authCredential.upsert({
+  // Bootstrap-only write: the seed must be safe to rerun on every deploy
+  // (deploy.yml runs it unconditionally against both uat and prod), so this
+  // must never overwrite a password an operator has since rotated. Only set
+  // the hash the first time this credential row is created.
+  const existingCredential = await prisma.authCredential.findUnique({
     where: { userId: user.id },
-    update: { passwordHash },
-    create: { userId: user.id, passwordHash },
   });
+  if (!existingCredential) {
+    const passwordHash = await bcrypt.hash(ADMIN_PASSWORD, 12);
+    await prisma.authCredential.create({
+      data: { userId: user.id, passwordHash },
+    });
+  }
 
   const superAdminRoleId = roleRecords['SUPER_ADMIN'];
   const existingRole = await prisma.userRole.findFirst({
@@ -537,7 +548,11 @@ async function main() {
   console.log(`  Acquirer: ${acquirer.code}`);
   console.log(`  Roles:    ${ROLES.map((r) => r.code).join(', ')}`);
   console.log(`  Admin:    ${ADMIN_EMAIL}`);
-  console.log(`  Password: ${ADMIN_PASSWORD}`);
+  console.log(
+    existingCredential
+      ? '  Password: (unchanged — existing credential, not reset by seed)'
+      : `  Password: ${ADMIN_PASSWORD} (bootstrap — rotate this immediately)`,
+  );
 }
 
 main()
