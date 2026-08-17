@@ -1,7 +1,4 @@
-import {
-  BadRequestException,
-  Injectable,
-} from '@nestjs/common';
+import { BadRequestException, Injectable } from '@nestjs/common';
 import { AmqpConnection } from '@golevelup/nestjs-rabbitmq';
 import { ConfigService } from '@nestjs/config';
 import { Prisma } from '@prisma/client';
@@ -24,7 +21,8 @@ type Tx = Prisma.TransactionClient;
 export interface CreateStudentInput {
   admissionNo: string;
   fullName: string;
-  guardianPhone?: string;
+  /// Mandatory (brief §4.3.4) — see Student.guardianPhone in schema.prisma.
+  guardianPhone: string;
   parentEmail?: string;
   idempotencyKey?: string;
 }
@@ -39,6 +37,18 @@ export interface BatchConfirmResult {
   queued: number;
   skipped: number;
 }
+
+/**
+ * Canonical current wording (brief §4.3.2) — owned server-side and stamped
+ * onto StudentRosterUpload.consentStatementText at commit time, rather than
+ * trusting client-supplied text, so a batch's record always reflects what
+ * was actually shown to the uploader when they attested, even if this
+ * wording changes later. Legal sufficiency of this exact text is still
+ * pending LFB Compliance/Legal sign-off — see the brief's open questions.
+ */
+export const PARENTAL_CONSENT_STATEMENT =
+  'The school confirms parental/guardian consent, or an equivalent lawful basis under the ' +
+  'Personal Data Protection Act 2022, has been obtained for the students in this roster.';
 
 @Injectable()
 export class StudentAliasService {
@@ -115,7 +125,12 @@ export class StudentAliasService {
             },
           }));
 
-        const alias = await this.issueStudentAlias(tx, merchantId, student.id, actorId);
+        const alias = await this.issueStudentAlias(
+          tx,
+          merchantId,
+          student.id,
+          actorId,
+        );
         return { student, alias };
       });
     } catch (err) {
@@ -137,15 +152,39 @@ export class StudentAliasService {
   async confirmBulkImport(
     merchantId: string,
     rows: CsvImportRow[],
-    actorId?: string,
+    actorId: string,
+    parentalConsentAttested: boolean,
   ): Promise<BatchConfirmResult> {
+    if (!parentalConsentAttested) {
+      throw new BadRequestException(
+        'This roster cannot be committed without confirming the parental/guardian consent attestation.',
+      );
+    }
+
     await this.assertSchoolMerchant(merchantId);
 
     const batchId = crypto.randomUUID();
     let queued = 0;
     let skipped = 0;
 
-    const rabbitmqEnabled = this.config.get<boolean>('rabbitmq.enabled') === true;
+    // Persisted before any student row is touched — the attestation covers
+    // the whole batch, and its own record (who/when/exact wording shown)
+    // must exist even if every row in the batch later fails for some other
+    // reason.
+    await this.prisma.studentRosterUpload.create({
+      data: {
+        merchantId,
+        batchId,
+        rowCount: rows.length,
+        parentalConsentAttested: true,
+        consentStatementText: PARENTAL_CONSENT_STATEMENT,
+        attestedBy: actorId,
+        attestedAt: new Date(),
+      },
+    });
+
+    const rabbitmqEnabled =
+      this.config.get<boolean>('rabbitmq.enabled') === true;
 
     for (const row of rows) {
       try {
@@ -220,7 +259,11 @@ export class StudentAliasService {
 
   // ── Issue alias (called by consumer or direct enrol) ─────────────────────
 
-  async issueStudentAliasById(studentId: string, merchantId: string, actorId?: string) {
+  async issueStudentAliasById(
+    studentId: string,
+    merchantId: string,
+    actorId?: string,
+  ) {
     return this.prisma.$transaction(async (tx) =>
       this.issueStudentAlias(tx, merchantId, studentId, actorId),
     );
@@ -235,7 +278,9 @@ export class StudentAliasService {
     const student = await this.prisma.student.findUniqueOrThrow({
       where: { id: studentId },
       include: {
-        studentAlias: { include: { qrCode: { include: { payloadVersions: true } } } },
+        studentAlias: {
+          include: { qrCode: { include: { payloadVersions: true } } },
+        },
         merchant: true,
       },
     });
@@ -244,8 +289,10 @@ export class StudentAliasService {
       throw new BadRequestException('Student has no active Lipa Namba alias');
     }
 
-    const tlvPayload = student.studentAlias.qrCode?.payloadVersions[0]?.tlvPayload;
-    const rabbitmqEnabled = this.config.get<boolean>('rabbitmq.enabled') === true;
+    const tlvPayload =
+      student.studentAlias.qrCode?.payloadVersions[0]?.tlvPayload;
+    const rabbitmqEnabled =
+      this.config.get<boolean>('rabbitmq.enabled') === true;
 
     let emailQueued = false;
     let smsQueued = false;
@@ -378,7 +425,8 @@ export class StudentAliasService {
             admissionNo: row.admissionNo,
             status: 'created',
             studentId: (created as { id: string }).id,
-            lipaNamba: (created as { studentAlias?: { alias10digit?: string } }).studentAlias?.alias10digit,
+            lipaNamba: (created as { studentAlias?: { alias10digit?: string } })
+              .studentAlias?.alias10digit,
           });
         }
       } catch (err) {

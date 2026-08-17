@@ -2,6 +2,7 @@ import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 import { Transform } from 'class-transformer';
 import {
   IsArray,
+  IsBoolean,
   IsEmail,
   IsEnum,
   IsIn,
@@ -12,6 +13,10 @@ import {
   MinLength,
   ValidateIf,
 } from 'class-validator';
+import {
+  normalizeMobile,
+  TZ_MOBILE_RE,
+} from '../../domain/guardian-phone.util';
 
 export class CreateStudentDto {
   @ApiProperty({ example: 'ADM-2026-001' })
@@ -26,12 +31,20 @@ export class CreateStudentDto {
   @MaxLength(255)
   fullName!: string;
 
-  @ApiPropertyOptional({ example: '255712345678' })
-  @Transform(({ value }) => value || undefined)
-  @IsOptional()
+  @ApiProperty({
+    example: '255712345678',
+    description:
+      'Mandatory — primary delivery address for the student Lipa Namba notification. Accepts 07XXXXXXXX or 2557XXXXXXXX.',
+  })
+  @Transform(({ value }: { value?: string }) =>
+    typeof value === 'string' ? (normalizeMobile(value) ?? value) : value,
+  )
   @IsString()
-  @MaxLength(20)
-  guardianPhone?: string;
+  @Matches(TZ_MOBILE_RE, {
+    message:
+      'guardianPhone must be a valid Tanzanian mobile number (07XXXXXXXX or 2557XXXXXXXX)',
+  })
+  guardianPhone!: string;
 
   @ApiPropertyOptional({ example: 'amina.hassan@example.com' })
   @Transform(({ value }) => value || undefined)
@@ -52,7 +65,18 @@ export class CreateStudentDto {
 
 export class BulkConfirmDto {
   @ApiProperty({
-    description: 'Rows previously returned by the /bulk/preview endpoint that passed validation.',
+    description:
+      'Must be true — the school (finance-office uploader) attests that parental/guardian ' +
+      'consent, or an equivalent lawful basis under the Personal Data Protection Act 2022, has ' +
+      'been obtained for every student in this roster. This is a school-level attestation, not ' +
+      'per-student consent capture (brief §4.3.2) — the batch is rejected if this is not true.',
+  })
+  @IsBoolean()
+  parentalConsentAttested!: boolean;
+
+  @ApiProperty({
+    description:
+      'Rows previously returned by the /bulk/preview endpoint that passed validation.',
     type: 'array',
     items: {
       type: 'object',
@@ -60,7 +84,7 @@ export class BulkConfirmDto {
         row: { type: 'number' },
         admissionNo: { type: 'string' },
         fullName: { type: 'string' },
-        guardianPhone: { type: 'string', nullable: true },
+        guardianPhone: { type: 'string' },
         parentEmail: { type: 'string', nullable: true },
       },
     },
@@ -70,7 +94,7 @@ export class BulkConfirmDto {
     row: number;
     admissionNo: string;
     fullName: string;
-    guardianPhone?: string;
+    guardianPhone: string;
     parentEmail?: string;
   }>;
 }

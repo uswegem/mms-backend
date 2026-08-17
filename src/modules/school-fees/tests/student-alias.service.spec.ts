@@ -1,7 +1,12 @@
 import { Prisma } from '@prisma/client';
 import { BadRequestException } from '@nestjs/common';
 import { IdempotencyService } from '@infrastructure/idempotency/idempotency.service';
-import { StudentAliasService } from '../application/services/student-alias.service';
+import {
+  StudentAliasService,
+  PARENTAL_CONSENT_STATEMENT,
+} from '../application/services/student-alias.service';
+
+const GUARDIAN_PHONE = '255700000001';
 
 function createMockRedis() {
   const store = new Map<string, string>();
@@ -24,7 +29,11 @@ function buildTx(overrides: Partial<Record<string, unknown>> = {}) {
   return {
     student: {
       create: jest.fn((args: any) =>
-        Promise.resolve({ id: 'student-1', merchantId: 'merchant-1', ...args.data }),
+        Promise.resolve({
+          id: 'student-1',
+          merchantId: 'merchant-1',
+          ...args.data,
+        }),
       ),
     },
     merchant: {
@@ -37,7 +46,9 @@ function buildTx(overrides: Partial<Record<string, unknown>> = {}) {
       }),
     },
     studentAlias: {
-      create: jest.fn((args: any) => Promise.resolve({ id: 'alias-1', ...args.data })),
+      create: jest.fn((args: any) =>
+        Promise.resolve({ id: 'alias-1', ...args.data }),
+      ),
     },
     ...overrides,
   };
@@ -51,8 +62,27 @@ describe('StudentAliasService', () => {
   ) {
     const tx = buildTx(txOverrides);
     const prisma = {
-      merchant: { findUnique: jest.fn().mockResolvedValue({ isSchool: true, status: 'ACTIVE' }) },
-      student: { findFirst: jest.fn().mockResolvedValue(null) },
+      merchant: {
+        findUnique: jest
+          .fn()
+          .mockResolvedValue({ isSchool: true, status: 'ACTIVE' }),
+      },
+      student: {
+        findFirst: jest.fn().mockResolvedValue(null),
+        create: jest.fn((args: any) =>
+          Promise.resolve({
+            id: 'student-1',
+            merchantId: 'merchant-1',
+            ...args.data,
+          }),
+        ),
+        update: jest.fn((args: any) =>
+          Promise.resolve({ id: 'student-1', ...args.data }),
+        ),
+      },
+      studentRosterUpload: {
+        create: jest.fn().mockResolvedValue({ id: 'upload-1' }),
+      },
       $transaction: jest.fn((cb: (tx: unknown) => unknown) => cb(tx)),
       ...prismaOverrides,
     };
@@ -102,12 +132,16 @@ describe('StudentAliasService', () => {
       const result = await service.createStudent('merchant-1', {
         admissionNo: 'ADM-001',
         fullName: 'A B',
+        guardianPhone: GUARDIAN_PHONE,
       });
 
       expect(aliases.generateStudentAlias).toHaveBeenCalledTimes(1);
       expect(tx.studentAlias.create).toHaveBeenCalledWith(
         expect.objectContaining({
-          data: expect.objectContaining({ alias10digit: '7800000015', aliasSeq6: '000001' }),
+          data: expect.objectContaining({
+            alias10digit: '7800000015',
+            aliasSeq6: '000001',
+          }),
         }),
       );
       expect((result as any).alias.alias10digit).toBe('7800000015');
@@ -116,7 +150,11 @@ describe('StudentAliasService', () => {
     it('does not pass internalRoutingId to createStaticQr (tag 62/05 dropped)', async () => {
       const { service, qr } = buildService();
 
-      await service.createStudent('merchant-1', { admissionNo: 'ADM-001', fullName: 'A B' });
+      await service.createStudent('merchant-1', {
+        admissionNo: 'ADM-001',
+        fullName: 'A B',
+        guardianPhone: GUARDIAN_PHONE,
+      });
 
       expect(qr.createStaticQr).toHaveBeenCalledWith(
         expect.not.objectContaining({ internalRoutingId: expect.anything() }),
@@ -128,25 +166,43 @@ describe('StudentAliasService', () => {
   describe('race condition: concurrent duplicate admission number', () => {
     it('translates a unique-constraint violation on student.create into the same friendly error a sequential duplicate gets', async () => {
       const { service, tx } = buildService({
-        student: { create: jest.fn().mockRejectedValue(p2002('Unique constraint failed')) },
+        student: {
+          create: jest
+            .fn()
+            .mockRejectedValue(p2002('Unique constraint failed')),
+        },
       });
 
       await expect(
-        service.createStudent('merchant-1', { admissionNo: 'ADM-001', fullName: 'A B' }),
+        service.createStudent('merchant-1', {
+          admissionNo: 'ADM-001',
+          fullName: 'A B',
+          guardianPhone: GUARDIAN_PHONE,
+        }),
       ).rejects.toThrow(BadRequestException);
       await expect(
-        service.createStudent('merchant-1', { admissionNo: 'ADM-001', fullName: 'A B' }),
+        service.createStudent('merchant-1', {
+          admissionNo: 'ADM-001',
+          fullName: 'A B',
+          guardianPhone: GUARDIAN_PHONE,
+        }),
       ).rejects.toThrow('already enrolled');
       expect(tx.student.create).toHaveBeenCalled();
     });
 
     it('does not swallow unrelated errors from student.create', async () => {
       const { service } = buildService({
-        student: { create: jest.fn().mockRejectedValue(new Error('connection reset')) },
+        student: {
+          create: jest.fn().mockRejectedValue(new Error('connection reset')),
+        },
       });
 
       await expect(
-        service.createStudent('merchant-1', { admissionNo: 'ADM-001', fullName: 'A B' }),
+        service.createStudent('merchant-1', {
+          admissionNo: 'ADM-001',
+          fullName: 'A B',
+          guardianPhone: GUARDIAN_PHONE,
+        }),
       ).rejects.toThrow('connection reset');
     });
   });
@@ -156,14 +212,18 @@ describe('StudentAliasService', () => {
       const redis = createMockRedis();
       const { service, prisma } = buildService({}, redis);
 
-      const first = await service.createStudent(
-        'merchant-1',
-        { admissionNo: 'ADM-001', fullName: 'A B', idempotencyKey: 'stu-key-1' },
-      );
-      const second = await service.createStudent(
-        'merchant-1',
-        { admissionNo: 'ADM-001', fullName: 'A B', idempotencyKey: 'stu-key-1' },
-      );
+      const first = await service.createStudent('merchant-1', {
+        admissionNo: 'ADM-001',
+        fullName: 'A B',
+        guardianPhone: GUARDIAN_PHONE,
+        idempotencyKey: 'stu-key-1',
+      });
+      const second = await service.createStudent('merchant-1', {
+        admissionNo: 'ADM-001',
+        fullName: 'A B',
+        guardianPhone: GUARDIAN_PHONE,
+        idempotencyKey: 'stu-key-1',
+      });
 
       expect(prisma.$transaction).toHaveBeenCalledTimes(1);
       expect(second).toEqual(first);
@@ -171,13 +231,17 @@ describe('StudentAliasService', () => {
 
     it('rejects a concurrent createStudent request sharing the same key while the first is still in flight', async () => {
       const redis = createMockRedis();
-      redis.store.set('idem:student:create:merchant-1:concurrent-1', '__PROCESSING__');
+      redis.store.set(
+        'idem:student:create:merchant-1:concurrent-1',
+        '__PROCESSING__',
+      );
       const { service } = buildService({}, redis);
 
       await expect(
         service.createStudent('merchant-1', {
           admissionNo: 'ADM-002',
           fullName: 'C D',
+          guardianPhone: GUARDIAN_PHONE,
           idempotencyKey: 'concurrent-1',
         }),
       ).rejects.toThrow('already being processed');
@@ -186,10 +250,27 @@ describe('StudentAliasService', () => {
     it('replays the cached result for a retried bulkUpload request with the same key', async () => {
       const redis = createMockRedis();
       const { service, prisma } = buildService({}, redis);
-      const rows = [{ row: 1, admissionNo: 'ADM-010', fullName: 'E F' }];
+      const rows = [
+        {
+          row: 1,
+          admissionNo: 'ADM-010',
+          fullName: 'E F',
+          guardianPhone: GUARDIAN_PHONE,
+        },
+      ];
 
-      const first = await service.bulkUpload('merchant-1', rows, 'user-1', 'bulk-key-1');
-      const second = await service.bulkUpload('merchant-1', rows, 'user-1', 'bulk-key-1');
+      const first = await service.bulkUpload(
+        'merchant-1',
+        rows,
+        'user-1',
+        'bulk-key-1',
+      );
+      const second = await service.bulkUpload(
+        'merchant-1',
+        rows,
+        'user-1',
+        'bulk-key-1',
+      );
 
       expect(prisma.$transaction).toHaveBeenCalledTimes(1);
       expect(second).toEqual(first);
@@ -199,11 +280,72 @@ describe('StudentAliasService', () => {
       const redis = createMockRedis();
       const { service, prisma } = buildService({}, redis);
 
-      await service.createStudent('merchant-1', { admissionNo: 'ADM-001', fullName: 'A B' });
-      await service.createStudent('merchant-1', { admissionNo: 'ADM-002', fullName: 'A B' });
+      await service.createStudent('merchant-1', {
+        admissionNo: 'ADM-001',
+        fullName: 'A B',
+        guardianPhone: GUARDIAN_PHONE,
+      });
+      await service.createStudent('merchant-1', {
+        admissionNo: 'ADM-002',
+        fullName: 'A B',
+        guardianPhone: GUARDIAN_PHONE,
+      });
 
       expect(prisma.$transaction).toHaveBeenCalledTimes(2);
       expect(redis.set).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('confirmBulkImport — parental/guardian consent attestation (brief §4.3.2)', () => {
+    const rows = [
+      {
+        row: 1,
+        admissionNo: 'ADM-020',
+        fullName: 'G H',
+        guardianPhone: GUARDIAN_PHONE,
+      },
+    ];
+
+    it('rejects the whole batch when parentalConsentAttested is false, before touching any student row', async () => {
+      const { service, prisma, tx } = buildService();
+
+      await expect(
+        service.confirmBulkImport('merchant-1', rows, 'user-1', false),
+      ).rejects.toBeInstanceOf(BadRequestException);
+
+      expect(prisma.studentRosterUpload.create).not.toHaveBeenCalled();
+      expect(tx.student.create).not.toHaveBeenCalled();
+    });
+
+    it('persists the attestation record — who, when, and the exact statement text — before creating any student', async () => {
+      const { service, prisma } = buildService();
+
+      await service.confirmBulkImport('merchant-1', rows, 'user-1', true);
+
+      expect(prisma.studentRosterUpload.create).toHaveBeenCalledWith({
+        data: expect.objectContaining({
+          merchantId: 'merchant-1',
+          rowCount: 1,
+          parentalConsentAttested: true,
+          consentStatementText: PARENTAL_CONSENT_STATEMENT,
+          attestedBy: 'user-1',
+          attestedAt: expect.any(Date),
+        }),
+      });
+    });
+
+    it('proceeds to create students once attested', async () => {
+      const { service, prisma } = buildService();
+
+      const result = await service.confirmBulkImport(
+        'merchant-1',
+        rows,
+        'user-1',
+        true,
+      );
+
+      expect(prisma.student.create).toHaveBeenCalled();
+      expect(result.total).toBe(1);
     });
   });
 });

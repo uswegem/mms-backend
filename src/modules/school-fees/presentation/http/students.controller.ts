@@ -27,7 +27,11 @@ import type { JwtPayload } from '@modules/identity/infrastructure/strategies/jwt
 import { StudentAliasService } from '../../application/services/student-alias.service';
 import { BulkStudentUploadService } from '../../application/services/bulk-student-upload.service';
 import { PosterRenderer } from '@shared/qr-poster/poster.renderer';
-import { BulkConfirmDto, CreateStudentDto, SendQrDto } from '../dto/student.dto';
+import {
+  BulkConfirmDto,
+  CreateStudentDto,
+  SendQrDto,
+} from '../dto/student.dto';
 
 @ApiTags('Students')
 @ApiBearerAuth('access-token')
@@ -52,7 +56,9 @@ export class StudentsController {
 
   @Post()
   @RequirePermissions(Permission.SCHOOL_STUDENT_WRITE)
-  @ApiOperation({ summary: 'Enrol single student — permanent Lipa Namba + static TANQR' })
+  @ApiOperation({
+    summary: 'Enrol single student — permanent Lipa Namba + static TANQR',
+  })
   create(
     @CurrentUser() user: JwtPayload,
     @Param('merchantId', ParseUUIDPipe) merchantId: string,
@@ -79,7 +85,8 @@ export class StudentsController {
   @HttpCode(HttpStatus.OK)
   @ApiConsumes('multipart/form-data')
   @ApiOperation({
-    summary: 'Parse and validate a bulk CSV — returns per-row preview with errors. No DB write.',
+    summary:
+      'Parse and validate a bulk CSV — returns per-row preview with errors. No DB write.',
   })
   @UseInterceptors(FileInterceptor('file'))
   async bulkPreview(
@@ -101,14 +108,20 @@ export class StudentsController {
   @HttpCode(HttpStatus.ACCEPTED)
   @ApiConsumes('multipart/form-data', 'application/json')
   @ApiOperation({
-    summary: 'Confirm bulk import — creates Student records and queues async alias generation.',
+    summary:
+      'Confirm bulk import — creates Student records and queues async alias generation.',
   })
   async bulkConfirm(
     @CurrentUser() user: JwtPayload,
     @Param('merchantId', ParseUUIDPipe) merchantId: string,
     @Body() dto: BulkConfirmDto,
   ) {
-    return this.students.confirmBulkImport(merchantId, dto.rows, user.sub);
+    return this.students.confirmBulkImport(
+      merchantId,
+      dto.rows,
+      user.sub,
+      dto.parentalConsentAttested,
+    );
   }
 
   // ── Send QR to parent ─────────────────────────────────────────────────────
@@ -116,7 +129,9 @@ export class StudentsController {
   @Post(':studentId/send-qr')
   @RequirePermissions(Permission.SCHOOL_STUDENT_WRITE)
   @HttpCode(HttpStatus.OK)
-  @ApiOperation({ summary: 'Queue QR poster delivery to parent via email and/or SMS' })
+  @ApiOperation({
+    summary: 'Queue QR poster delivery to parent via email and/or SMS',
+  })
   async sendQr(
     @Param('merchantId', ParseUUIDPipe) _merchantId: string,
     @Param('studentId', ParseUUIDPipe) studentId: string,

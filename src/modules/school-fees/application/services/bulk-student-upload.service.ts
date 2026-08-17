@@ -1,5 +1,6 @@
 import { BadRequestException, Injectable } from '@nestjs/common';
 import { parse } from 'csv-parse/sync';
+import { normalizeMobile } from '../../domain/guardian-phone.util';
 
 // ─── Types ───────────────────────────────────────────────────────────────────
 
@@ -7,7 +8,11 @@ export interface CsvImportRow {
   row: number;
   admissionNo: string;
   fullName: string;
-  guardianPhone?: string;
+  /// Mandatory (brief §4.3.4) — invalid rows carry '' here and are always
+  /// `valid: false`, so this is never actually persisted empty; typed as a
+  /// guaranteed string (not optional) so the compiler enforces that every
+  /// downstream consumer only ever sees committed, valid rows.
+  guardianPhone: string;
   parentEmail?: string;
 }
 
@@ -16,18 +21,7 @@ export interface PreviewRow extends CsvImportRow {
   valid: boolean;
 }
 
-// Tanzanian mobile: starts with 255 + 9 digits, or 07/06 + 8 digits
-const TZ_MOBILE_RE = /^(255[67]\d{8}|0[67]\d{8})$/;
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-
-// Normalize 07XXXXXXXX → 2557XXXXXXXX
-function normalizeMobile(raw: string): string | undefined {
-  if (!raw) return undefined;
-  const s = raw.replace(/\s+/g, '');
-  if (s.startsWith('255') && TZ_MOBILE_RE.test(s)) return s;
-  if (/^0[67]\d{8}$/.test(s)) return `255${s.slice(1)}`;
-  return undefined;
-}
 
 @Injectable()
 export class BulkStudentUploadService {
@@ -50,7 +44,7 @@ export class BulkStudentUploadService {
         trim: true,
         bom: true,
         relax_column_count: true,
-      }) as Record<string, string>[];
+      });
     } catch (err) {
       throw new BadRequestException(
         `CSV parse error: ${err instanceof Error ? err.message : String(err)}`,
@@ -62,8 +56,7 @@ export class BulkStudentUploadService {
     }
 
     // Normalise header keys to lower_snake_case
-    const normalizeKey = (k: string) =>
-      k.toLowerCase().replace(/[\s-]+/g, '_');
+    const normalizeKey = (k: string) => k.toLowerCase().replace(/[\s-]+/g, '_');
 
     return records.map((raw, i) => {
       const rec: Record<string, string> = {};
@@ -79,13 +72,17 @@ export class BulkStudentUploadService {
 
       // First + Surname → fullName
       const firstName = rec['firstname'] ?? rec['first_name'] ?? '';
-      const surname = rec['surname'] ?? rec['lastname'] ?? rec['last_name'] ?? '';
-      const explicitFullName = rec['full_name'] ?? rec['fullname'] ?? rec['name'] ?? '';
+      const surname =
+        rec['surname'] ?? rec['lastname'] ?? rec['last_name'] ?? '';
+      const explicitFullName =
+        rec['full_name'] ?? rec['fullname'] ?? rec['name'] ?? '';
       const fullName = explicitFullName || `${firstName} ${surname}`.trim();
-      if (!fullName) errors.push('Name is required (FirstName + Surname, or full_name)');
+      if (!fullName)
+        errors.push('Name is required (FirstName + Surname, or full_name)');
 
       // Parent email (optional but validated if present)
-      const rawEmail = rec['parentemail'] ?? rec['parent_email'] ?? rec['email'] ?? '';
+      const rawEmail =
+        rec['parentemail'] ?? rec['parent_email'] ?? rec['email'] ?? '';
       let parentEmail: string | undefined;
       if (rawEmail) {
         if (!EMAIL_RE.test(rawEmail)) {
@@ -95,7 +92,11 @@ export class BulkStudentUploadService {
         }
       }
 
-      // Mobile / guardian phone (optional but validated if present)
+      // Mobile / guardian phone — mandatory (brief §4.3.4): this is the
+      // primary delivery address for the student's Lipa Namba notification,
+      // so a row missing it is rejected here rather than committing a
+      // student with no notification address and deferring the problem to
+      // send time.
       const rawMobile =
         rec['mobilenumber'] ??
         rec['mobile_number'] ??
@@ -103,8 +104,10 @@ export class BulkStudentUploadService {
         rec['guardian_phone'] ??
         rec['phone'] ??
         '';
-      let guardianPhone: string | undefined;
-      if (rawMobile) {
+      let guardianPhone = '';
+      if (!rawMobile) {
+        errors.push('Guardian phone number is required');
+      } else {
         const normalized = normalizeMobile(rawMobile);
         if (!normalized) {
           errors.push(

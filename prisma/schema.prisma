@@ -566,6 +566,7 @@ model Merchant {
   onboardingAuditLogs  OnboardingAuditLog[]
   settlementCycles         SettlementCycle[]
   reconciliationExceptions ReconciliationException[]
+  studentRosterUploads     StudentRosterUpload[]
 
   @@index([acquirerId, status], map: "idx_merchants_acquirer_status")
   @@index([tradingName], map: "idx_merchants_trading_name")
@@ -1099,7 +1100,11 @@ model Student {
   merchantId    String        @map("merchant_id") @db.Uuid
   admissionNo   String        @map("admission_no") @db.VarChar(30)
   fullName      String        @map("full_name") @db.VarChar(255)
-  guardianPhone String?       @map("guardian_phone") @db.VarChar(20)
+  /// Mandatory — the primary delivery address for the student's Lipa Namba
+  /// notification (brief §4.3.4). A row missing this fails roster-upload
+  /// validation rather than committing a student with no notification
+  /// address to defer the problem to send time.
+  guardianPhone String        @map("guardian_phone") @db.VarChar(20)
   parentEmail   String?       @map("parent_email") @db.Citext
   status        StudentStatus @default(ACTIVE) @map("status")
   isActive      Boolean       @default(true) @map("is_active")
@@ -1115,6 +1120,30 @@ model Student {
   @@unique([merchantId, admissionNo])
   @@index([merchantId])
   @@map("students")
+}
+
+/// One row per bulk roster upload batch (brief §4.3.2) — the school-level
+/// consent/lawful-basis attestation lives here, not per-student, since MMS
+/// isn't expected to verify each parent's consent individually, only that
+/// the school affirmatively confirmed the lawful basis exists. The exact
+/// statement text is captured at commit time (server-stamped, not
+/// client-supplied) so a later wording change doesn't retroactively alter
+/// what an earlier upload actually attested to.
+model StudentRosterUpload {
+  id                      String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  merchantId              String   @map("merchant_id") @db.Uuid
+  batchId                 String   @unique @map("batch_id") @db.Uuid
+  rowCount                Int      @map("row_count")
+  parentalConsentAttested Boolean  @default(false) @map("parental_consent_attested")
+  consentStatementText    String   @map("consent_statement_text") @db.Text
+  attestedBy              String   @map("attested_by") @db.Uuid
+  attestedAt              DateTime @map("attested_at") @db.Timestamptz(6)
+  createdAt               DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  merchant Merchant @relation(fields: [merchantId], references: [id])
+
+  @@index([merchantId])
+  @@map("student_roster_uploads")
 }
 
 model StudentAlias {
