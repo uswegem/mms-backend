@@ -54,6 +54,21 @@ export class VerifySettlementCommand {
   ) {}
 }
 
+export class VerifyBeneficialOwnerNidaCommand {
+  constructor(
+    public readonly actor: ActorContext,
+    public readonly applicationId: string,
+    public readonly beneficialOwnerId: string,
+  ) {}
+}
+
+export class VerifyTinCommand {
+  constructor(
+    public readonly actor: ActorContext,
+    public readonly applicationId: string,
+  ) {}
+}
+
 export class AmlScreenOnboardingCommand {
   constructor(
     public readonly actor: ActorContext,

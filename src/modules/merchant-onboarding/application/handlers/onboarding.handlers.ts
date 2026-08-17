@@ -1,11 +1,12 @@
 import { CommandHandler, ICommandHandler, IQueryHandler, QueryHandler } from '@nestjs/cqrs';
-import { createCipheriv, randomBytes } from 'crypto';
 import { AuditLogService } from '@infrastructure/audit/services/audit-log.service';
 import { ConfigService } from '@nestjs/config';
 import { OnboardingRepository } from '../../infrastructure/persistence/onboarding.repository';
 import { OnboardingDuplicateService } from '../services/onboarding-duplicate.service';
 import { OnboardingWorkflowService } from '../services/onboarding-workflow.service';
 import { ReferenceDataService } from '@modules/reference-data/application/services/reference-data.service';
+import { IdentityVerificationService } from '../services/identity-verification.service';
+import { encryptIdNumber, resolveIdNumberKey } from '../../domain/id-number-crypto.util';
 import { toOnboardingResponse } from '../mappers/onboarding-response.mapper';
 import {
   OnboardingForbiddenException,
@@ -25,18 +26,13 @@ import {
   ResubmitOnboardingCommand,
   SubmitOnboardingCommand,
   UpdateOnboardingApplicationCommand,
+  VerifyBeneficialOwnerNidaCommand,
   VerifySettlementCommand,
+  VerifyTinCommand,
 } from '../commands/onboarding.commands';
 
 function assertAcquirer(actor: { acquirerId: string }, acquirerId: string) {
   if (actor.acquirerId !== acquirerId) throw new OnboardingForbiddenException();
-}
-
-function encryptIdNumber(idNumber: string, keyHex: string): Buffer {
-  const key = Buffer.from(keyHex.slice(0, 64), 'hex');
-  const iv = randomBytes(16);
-  const cipher = createCipheriv('aes-256-cbc', key, iv);
-  return Buffer.concat([iv, cipher.update(idNumber, 'utf8'), cipher.final()]);
 }
 
 @CommandHandler(CreateOnboardingApplicationCommand)
@@ -148,9 +144,7 @@ export class AddBeneficialOwnerHandler
     const existing = await this.onboarding.findById(command.applicationId);
     if (!existing) throw new OnboardingNotFoundException(command.applicationId);
     assertAcquirer(command.actor, existing.acquirerId);
-    const key =
-      this.config.get<string>('MFA_ENCRYPTION_KEY') ??
-      '0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef';
+    const key = resolveIdNumberKey(this.config);
     const owner = await this.onboarding.addBeneficialOwner(
       command.applicationId,
       command.dto.fullName,
@@ -206,6 +200,30 @@ export class VerifySettlementHandler
 
   async execute(command: VerifySettlementCommand) {
     return this.workflow.verifySettlement(command.applicationId, command.actor.sub);
+  }
+}
+
+@CommandHandler(VerifyBeneficialOwnerNidaCommand)
+export class VerifyBeneficialOwnerNidaHandler
+  implements ICommandHandler<VerifyBeneficialOwnerNidaCommand>
+{
+  constructor(private readonly identity: IdentityVerificationService) {}
+
+  async execute(command: VerifyBeneficialOwnerNidaCommand) {
+    return this.identity.verifyBeneficialOwnerNida(
+      command.applicationId,
+      command.beneficialOwnerId,
+      command.actor.sub,
+    );
+  }
+}
+
+@CommandHandler(VerifyTinCommand)
+export class VerifyTinHandler implements ICommandHandler<VerifyTinCommand> {
+  constructor(private readonly identity: IdentityVerificationService) {}
+
+  async execute(command: VerifyTinCommand) {
+    return this.identity.verifyTin(command.applicationId, command.actor.sub);
   }
 }
 
@@ -397,6 +415,8 @@ export const ONBOARDING_HANDLERS = [
   AddBeneficialOwnerHandler,
   AssignSettlementAccountHandler,
   VerifySettlementHandler,
+  VerifyBeneficialOwnerNidaHandler,
+  VerifyTinHandler,
   AmlScreenOnboardingHandler,
   SubmitOnboardingHandler,
   MakerApproveOnboardingHandler,

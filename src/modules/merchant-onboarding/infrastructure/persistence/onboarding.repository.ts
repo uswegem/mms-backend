@@ -8,6 +8,7 @@ import {
   MerchantStatus,
   OnboardingStatus,
   Prisma,
+  VerificationResult,
 } from '@prisma/client';
 import { PrismaService } from '@infrastructure/database/prisma/prisma.service';
 import { DEFAULT_MERCHANT_STEPS } from '../../domain/constants/onboarding-steps';
@@ -902,5 +903,45 @@ export class OnboardingRepository {
       select: { companyRegistrationNo: true },
     });
     return app?.companyRegistrationNo ?? null;
+  }
+
+  // ── NIDA / TRA verification (brief §4.3, onboarding Steps 2/3) ─────────────
+
+  async recordNidaVerification(data: {
+    applicationId: string;
+    beneficialOwnerId: string;
+    result: VerificationResult;
+    verifiedName?: string;
+    failureReason?: string;
+    rawResponse?: Prisma.InputJsonValue;
+    verifiedBy: string;
+  }) {
+    return this.prisma.nidaVerificationResult.create({ data });
+  }
+
+  async recordTraVerification(data: {
+    applicationId: string;
+    tin: string;
+    result: VerificationResult;
+    verifiedName?: string;
+    failureReason?: string;
+    rawResponse?: Prisma.InputJsonValue;
+    verifiedBy: string;
+  }) {
+    return this.prisma.traVerificationResult.create({ data });
+  }
+
+  /**
+   * Upsert, not updateMany-against-an-existing-row: NIDA_VERIFICATION and
+   * TRA_VERIFICATION step codes were added after some applications already
+   * existed, so those rows may not have this step materialized yet from
+   * DEFAULT_MERCHANT_STEPS.
+   */
+  async markStepComplete(applicationId: string, stepCode: string) {
+    return this.prisma.onboardingStep.upsert({
+      where: { applicationId_stepCode: { applicationId, stepCode } },
+      update: { completedAt: new Date() },
+      create: { applicationId, stepCode, completedAt: new Date() },
+    });
   }
 }

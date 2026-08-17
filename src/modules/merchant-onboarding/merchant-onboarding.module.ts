@@ -16,7 +16,12 @@ import { OnboardingPipelineService } from './application/services/onboarding-pip
 import { OnboardingAuditService } from './application/services/onboarding-audit.service';
 import { OnboardingDuplicateService } from './application/services/onboarding-duplicate.service';
 import { MerchantIssuanceService } from './application/services/merchant-issuance.service';
+import { IdentityVerificationService } from './application/services/identity-verification.service';
 import { TpsIntegrationAdapter } from './infrastructure/integrations/tps-integration.adapter';
+import { NidaVerificationProvider } from './application/ports/nida-verification.port';
+import { TraVerificationProvider } from './application/ports/tra-verification.port';
+import { MockNidaVerificationProvider } from './infrastructure/services/mock-nida-verification.provider';
+import { MockTraVerificationProvider } from './infrastructure/services/mock-tra-verification.provider';
 import { ONBOARDING_HANDLERS } from './application/handlers/onboarding.handlers';
 import { ONBOARDING_PIPELINE_HANDLERS } from './application/handlers/onboarding-pipeline.handlers';
 
@@ -39,7 +44,13 @@ import { ONBOARDING_PIPELINE_HANDLERS } from './application/handlers/onboarding-
     OnboardingAuditService,
     OnboardingDuplicateService,
     MerchantIssuanceService,
+    IdentityVerificationService,
     TpsIntegrationAdapter,
+    {
+      provide: NidaVerificationProvider,
+      useClass: MockNidaVerificationProvider,
+    },
+    { provide: TraVerificationProvider, useClass: MockTraVerificationProvider },
     ...ONBOARDING_HANDLERS,
     ...ONBOARDING_PIPELINE_HANDLERS,
     {

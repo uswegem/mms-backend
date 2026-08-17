@@ -28,6 +28,8 @@ import { RejectOnboardingCommand } from '../../application/commands/reject-onboa
 import { ResubmitOnboardingCommand } from '../../application/commands/resubmit-onboarding.command';
 import { AmlScreenOnboardingCommand } from '../../application/commands/aml-screen-onboarding.command';
 import { VerifySettlementCommand } from '../../application/commands/verify-settlement.command';
+import { VerifyBeneficialOwnerNidaCommand } from '../../application/commands/verify-beneficial-owner-nida.command';
+import { VerifyTinCommand } from '../../application/commands/verify-tin.command';
 import { ListOnboardingApplicationsQuery } from '../../application/queries/list-onboarding-applications.query';
 import { GetOnboardingApplicationQuery } from '../../application/queries/get-onboarding-application.query';
 import { GetOnboardingTimelineQuery } from '../../application/queries/get-onboarding-timeline.query';
@@ -150,6 +152,31 @@ export class OnboardingController {
     return this.commandBus.execute(
       new AddBeneficialOwnerCommand(toActor(user), id, dto),
     );
+  }
+
+  @Post(':id/beneficial-owners/:ownerId/verify-nida')
+  @RequirePermissions(Permission.ONBOARDING_WRITE)
+  @ApiOperation({
+    summary: 'Verify a beneficial owner’s national ID against NIDA (brief §4.3, Step 2)',
+  })
+  async verifyBeneficialOwnerNida(
+    @CurrentUser() user: JwtPayload,
+    @Param('id', ParseUUIDPipe) id: string,
+    @Param('ownerId', ParseUUIDPipe) ownerId: string,
+  ) {
+    return this.commandBus.execute(
+      new VerifyBeneficialOwnerNidaCommand(toActor(user), id, ownerId),
+    );
+  }
+
+  @Post(':id/verify-tin')
+  @RequirePermissions(Permission.ONBOARDING_WRITE)
+  @ApiOperation({ summary: 'Verify TIN against TRA (brief §4.3, Step 3)' })
+  async verifyTin(
+    @CurrentUser() user: JwtPayload,
+    @Param('id', ParseUUIDPipe) id: string,
+  ) {
+    return this.commandBus.execute(new VerifyTinCommand(toActor(user), id));
   }
 
   @Post(':id/settlement-account')

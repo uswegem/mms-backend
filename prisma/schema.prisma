@@ -803,6 +803,8 @@ model OnboardingApplication {
   riskReviews      MerchantRiskReview[]
   approvals        MerchantOnboardingApproval[]
   auditLogs        OnboardingAuditLog[]
+  nidaVerifications NidaVerificationResult[]
+  traVerifications  TraVerificationResult[]
 
   @@unique([acquirerId, applicationNo])
   @@index([acquirerId, status])
@@ -859,9 +861,61 @@ model BeneficialOwner {
   deletedAt     DateTime? @map("deleted_at") @db.Timestamptz(6)
   deletedBy     String?   @map("deleted_by") @db.Uuid
 
-  application OnboardingApplication @relation(fields: [applicationId], references: [id], onDelete: Cascade)
+  application       OnboardingApplication     @relation(fields: [applicationId], references: [id], onDelete: Cascade)
+  nidaVerifications NidaVerificationResult[]
 
   @@map("beneficial_owners")
+}
+
+/// Brief §4.3: NIDA verification (onboarding Step 2). One row per
+/// verification attempt against a beneficial owner's national ID — an
+/// owner can be re-verified after correcting a typo'd ID number, so this
+/// is an append-only attempt log, not a single mutable status field.
+enum VerificationResult {
+  MATCH
+  MISMATCH
+  NOT_FOUND
+  PROVIDER_ERROR
+
+  @@map("verification_result")
+}
+
+model NidaVerificationResult {
+  id                String             @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  applicationId     String             @map("application_id") @db.Uuid
+  beneficialOwnerId String             @map("beneficial_owner_id") @db.Uuid
+  result            VerificationResult
+  verifiedName      String?            @map("verified_name") @db.VarChar(255)
+  failureReason     String?            @map("failure_reason") @db.Text
+  rawResponse       Json?              @map("raw_response")
+  verifiedAt        DateTime           @default(now()) @map("verified_at") @db.Timestamptz(6)
+  verifiedBy        String?            @map("verified_by") @db.Uuid
+
+  application     OnboardingApplication @relation(fields: [applicationId], references: [id], onDelete: Cascade)
+  beneficialOwner BeneficialOwner       @relation(fields: [beneficialOwnerId], references: [id], onDelete: Cascade)
+
+  @@index([applicationId])
+  @@index([beneficialOwnerId])
+  @@map("nida_verification_results")
+}
+
+/// Brief §4.3: TRA TIN verification (onboarding Step 3), against
+/// Merchant.taxId. Same append-only-attempt-log reasoning as NIDA above.
+model TraVerificationResult {
+  id            String             @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  applicationId String             @map("application_id") @db.Uuid
+  tin           String             @db.VarChar(50)
+  result        VerificationResult
+  verifiedName  String?            @map("verified_name") @db.VarChar(255)
+  failureReason String?            @map("failure_reason") @db.Text
+  rawResponse   Json?              @map("raw_response")
+  verifiedAt    DateTime           @default(now()) @map("verified_at") @db.Timestamptz(6)
+  verifiedBy    String?            @map("verified_by") @db.Uuid
+
+  application OnboardingApplication @relation(fields: [applicationId], references: [id], onDelete: Cascade)
+
+  @@index([applicationId])
+  @@map("tra_verification_results")
 }
 
 model AmlScreeningResult {
