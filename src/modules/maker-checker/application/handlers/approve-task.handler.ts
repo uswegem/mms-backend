@@ -36,6 +36,23 @@ export class ApproveTaskHandler implements ICommandHandler<ApproveTaskCommand> {
       command.notes,
     );
 
+    // Audited immediately after the task's own approval is durably
+    // committed, and before either downstream port runs. Those ports do
+    // their own further DB writes (e.g. applying the merchant status
+    // change) that can legitimately fail — a duplicate-transition guard,
+    // a re-validation rejection, etc. If this audit write were deferred
+    // until after those calls, that failure would leave a task that is
+    // genuinely APPROVED in the database with no audit trail of the
+    // approval at all. Recording here guarantees the task-level action is
+    // never skipped by a later, unrelated failure.
+    await this.audit.record({
+      actorId: command.actor.sub,
+      action: 'APPROVAL_TASK_APPROVED',
+      entityType: 'approval_task',
+      entityId: task.id,
+      metadata: { entityType: task.entityType, entityId: task.entityId },
+    });
+
     if (
       this.onboardingApproval &&
       (task.entityType === ApprovalEntityType.MERCHANT_ONBOARDING ||
@@ -56,14 +73,6 @@ export class ApproveTaskHandler implements ICommandHandler<ApproveTaskCommand> {
         command.actor.sub,
       );
     }
-
-    await this.audit.record({
-      actorId: command.actor.sub,
-      action: 'APPROVAL_TASK_APPROVED',
-      entityType: 'approval_task',
-      entityId: task.id,
-      metadata: { entityType: task.entityType, entityId: task.entityId },
-    });
 
     return toApprovalTaskResponse(task);
   }

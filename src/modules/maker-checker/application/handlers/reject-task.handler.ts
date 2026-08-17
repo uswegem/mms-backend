@@ -36,6 +36,19 @@ export class RejectTaskHandler implements ICommandHandler<RejectTaskCommand> {
       command.notes,
     );
 
+    // See approve-task.handler.ts: recorded immediately after the task's
+    // own rejection is durably committed, and before either downstream
+    // port — which can itself fail — so that failure can never leave a
+    // task that is genuinely REJECTED in the database with no audit trail
+    // of the rejection.
+    await this.audit.record({
+      actorId: command.actor.sub,
+      action: 'APPROVAL_TASK_REJECTED',
+      entityType: 'approval_task',
+      entityId: task.id,
+      metadata: { entityType: task.entityType, entityId: task.entityId },
+    });
+
     if (
       this.onboardingApproval &&
       (task.entityType === ApprovalEntityType.MERCHANT_ONBOARDING ||
@@ -58,14 +71,6 @@ export class RejectTaskHandler implements ICommandHandler<RejectTaskCommand> {
         command.notes,
       );
     }
-
-    await this.audit.record({
-      actorId: command.actor.sub,
-      action: 'APPROVAL_TASK_REJECTED',
-      entityType: 'approval_task',
-      entityId: task.id,
-      metadata: { entityType: task.entityType, entityId: task.entityId },
-    });
 
     return toApprovalTaskResponse(task);
   }
