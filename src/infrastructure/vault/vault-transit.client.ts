@@ -37,6 +37,17 @@ export class VaultTransitClient {
    * Signs `signingInput` (the JWT's `header.payload` string) under the
    * named key's current version. Vault hashes the input itself (sha2-256,
    * per the URL) — the caller sends raw bytes, not a pre-hashed digest.
+   *
+   * signature_algorithm is explicit and load-bearing: Vault Transit's
+   * default for an rsa-2048 key is PSS, but JWT's RS256 (RFC 7518 §3.3)
+   * is specifically RSASSA-PKCS1-v1_5 — every standard JWT verifier
+   * (jose, jsonwebtoken, ...) rejects a PSS signature under RS256 as an
+   * invalid signature. Confirmed by hand: every access token this
+   * service issued failed verification 100% of the time against a real
+   * Vault instance until this was added — login always "succeeded"
+   * (issuing a token), but every subsequent authenticated request 401'd,
+   * silently, with no server-side error logged anywhere. Caught only by
+   * testing a real browser login against a live (not mocked) Vault.
    */
   async sign(signingInput: string): Promise<VaultSignResult> {
     const body = await this.request(
@@ -44,6 +55,7 @@ export class VaultTransitClient {
       `transit/sign/${this.keyName}/sha2-256`,
       {
         input: Buffer.from(signingInput, 'utf8').toString('base64'),
+        signature_algorithm: 'pkcs1v15',
       },
     );
     const raw = (body as { data: { signature: string } }).data.signature;

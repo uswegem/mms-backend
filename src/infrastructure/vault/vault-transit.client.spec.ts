@@ -39,6 +39,31 @@ describe('VaultTransitClient — HTTP contract', () => {
     expect(result).toEqual({ keyVersion: 3, signature: 'c2lnbmF0dXJl' });
   });
 
+  it('requests pkcs1v15 padding explicitly — regression test for a real bug: Vault Transit defaults an rsa-2048 key to PSS, but JWT RS256 (RFC 7518 §3.3) requires PKCS1v15, so every token this signed failed verification 100% of the time against a real Vault until this was added, with no server-side error logged anywhere', async () => {
+    const auth = {
+      getToken: jest.fn().mockResolvedValue('t'),
+      relogin: jest.fn(),
+    };
+    const fetchMock = jest
+      .fn()
+      .mockResolvedValue(
+        jsonResponse(200, { data: { signature: 'vault:v1:c2ln' } }),
+      );
+    (global as unknown as { fetch: typeof fetch }).fetch = fetchMock;
+
+    const client = new VaultTransitClient(
+      auth as unknown as VaultAuthProvider,
+      config as never,
+    );
+    await client.sign('header.payload');
+
+    const [, options] = fetchMock.mock.calls[0] as [string, RequestInit];
+    const sentBody = JSON.parse(options.body as string) as {
+      signature_algorithm?: string;
+    };
+    expect(sentBody.signature_algorithm).toBe('pkcs1v15');
+  });
+
   it('re-authenticates once on a 403 and retries, rather than failing immediately', async () => {
     const auth = {
       getToken: jest.fn().mockResolvedValue('stale-token'),

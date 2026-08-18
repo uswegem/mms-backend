@@ -1,3 +1,4 @@
+import { createPublicKey, verify } from 'crypto';
 import { VaultAuthProvider } from './vault-auth.provider';
 import { VaultTransitClient } from './vault-transit.client';
 
@@ -60,7 +61,6 @@ describe('Vault Transit — live round trip', () => {
 
     const { publicKeyPem } = await client.getPublicKey(keyVersion);
 
-    const { createPublicKey, verify } = await import('crypto');
     const ok = verify(
       'sha256',
       Buffer.from(signingInput, 'utf8'),
