@@ -134,6 +134,7 @@ export class SettlementsService {
         accountNumber: account.accountNumber,
         netAmount: cycle.netAmount.toString(),
         cycleDate: cycle.cycleDate,
+        idempotencyKey: cycle.id,
       });
       await this.settlements.markPosted(
         cycleId,

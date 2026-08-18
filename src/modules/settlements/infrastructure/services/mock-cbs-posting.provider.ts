@@ -15,10 +15,12 @@ export class MockCbsPostingProvider extends CbsPostingProvider {
     accountNumber: string;
     netAmount: string;
     cycleDate: Date;
+    idempotencyKey: string;
   }): Promise<CbsPostingResult> {
     const postingRef = `CBS-MOCK-${randomUUID().slice(0, 8).toUpperCase()}`;
     this.logger.log(
-      `Mock-posted ${input.netAmount} TZS to ${input.accountNumber} for merchant ${input.merchantId} (${postingRef})`,
+      `Mock-posted ${input.netAmount} TZS to ${input.accountNumber} for merchant ${input.merchantId} ` +
+        `(${postingRef}, idempotencyKey=${input.idempotencyKey})`,
     );
     return Promise.resolve({ postingRef, postedAt: new Date() });
   }

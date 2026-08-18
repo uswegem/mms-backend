@@ -1,5 +1,6 @@
 import { Injectable } from '@nestjs/common';
 import { PrismaService } from '@infrastructure/database/prisma/prisma.service';
+import { CbsValidationProvider } from '../ports/cbs-validation.port';
 
 export interface CbsVerificationResult {
   result: 'PASS' | 'FAIL';
@@ -7,11 +8,18 @@ export interface CbsVerificationResult {
 }
 
 /**
- * CBS account verification stub — replace with real CBS enquiry in production.
+ * Orchestrates CBS settlement-account validation (Scope §3 CBS function
+ * #1, brief §4.3 Step 5): calls the swappable CbsValidationProvider port
+ * for the actual check, then owns persisting the attempt and querying
+ * prior verifications — the same split as IdentityVerificationService /
+ * NidaVerificationProvider in the onboarding module.
  */
 @Injectable()
 export class CbsVerificationService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly validation: CbsValidationProvider,
+  ) {}
 
   async verifySettlementAccount(
     merchantId: string,
@@ -20,15 +28,11 @@ export class CbsVerificationService {
     verifiedBy: string,
   ): Promise<CbsVerificationResult> {
     const normalized = accountNumber.replace(/\s/g, '');
-    const pass =
-      normalized.length >= 10 &&
-      normalized.length <= 20 &&
-      /^[0-9]+$/.test(normalized) &&
-      accountName.trim().length >= 2;
+    const outcome = await this.validation.verify(normalized, accountName);
 
     const result: CbsVerificationResult = {
-      result: pass ? 'PASS' : 'FAIL',
-      accountName: pass ? accountName : '',
+      result: outcome.result,
+      accountName: outcome.result === 'PASS' ? accountName : '',
     };
 
     await this.prisma.cbsAccountVerification.create({
