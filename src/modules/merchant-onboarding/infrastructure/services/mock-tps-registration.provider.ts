@@ -1,26 +1,21 @@
 import { Injectable } from '@nestjs/common';
 import { IntegrationStatus, IntegrationType, Prisma } from '@prisma/client';
 import { PrismaService } from '@infrastructure/database/prisma/prisma.service';
+import {
+  TpsRegistrationProvider,
+  TpsRegistrationRequest,
+  TpsRegistrationResult,
+} from '../../application/ports/tps-registration.port';
 
-export interface TpsRegistrationRequest {
-  merchantId: string;
-  legalName: string;
-  tradingName: string;
-  mcc: string;
-  taxId?: string | null;
-}
-
-export interface TpsRegistrationResult {
-  success: boolean;
-  tpsMerchantId?: string;
-  referenceId?: string;
-  failureReason?: string;
-  responsePayload: Record<string, unknown>;
-}
-
+/**
+ * Dev/UAT stand-in for real TIPS directory registration. Swap this class,
+ * not its callers, once BOT/TIPS sandbox access exists.
+ */
 @Injectable()
-export class TpsIntegrationAdapter {
-  constructor(private readonly prisma: PrismaService) {}
+export class MockTpsRegistrationProvider extends TpsRegistrationProvider {
+  constructor(private readonly prisma: PrismaService) {
+    super();
+  }
 
   async registerMerchant(
     request: TpsRegistrationRequest,
@@ -41,7 +36,8 @@ export class TpsIntegrationAdapter {
         success: true,
         tpsMerchantId: existing.externalReferenceId,
         referenceId: existing.externalReferenceId,
-        responsePayload: (existing.responsePayload as Record<string, unknown>) ?? {},
+        responsePayload:
+          (existing.responsePayload as Record<string, unknown>) ?? {},
       };
     }
 
@@ -55,11 +51,7 @@ export class TpsIntegrationAdapter {
       requestedAt: new Date().toISOString(),
     };
 
-    const simulateFail =
-      request.tradingName.toUpperCase().includes('TIPS_FAIL') ||
-      request.tradingName.toUpperCase().includes('TPS_FAIL') ||
-      request.legalName.toUpperCase().includes('TIPS_FAIL') ||
-      request.legalName.toUpperCase().includes('TPS_FAIL');
+    const simulateFail = request.simulateOutcome === 'FAIL';
 
     const tipsMerchantId = simulateFail
       ? undefined
@@ -97,7 +89,9 @@ export class TpsIntegrationAdapter {
         externalReferenceId: tipsMerchantId,
         requestPayload,
         responsePayload: result.responsePayload as Prisma.InputJsonValue,
-        status: result.success ? IntegrationStatus.SUCCESS : IntegrationStatus.FAILED,
+        status: result.success
+          ? IntegrationStatus.SUCCESS
+          : IntegrationStatus.FAILED,
         failureReason: result.failureReason,
         retryCount: 0,
         lastTriedAt: new Date(),
@@ -106,7 +100,9 @@ export class TpsIntegrationAdapter {
         externalReferenceId: tipsMerchantId,
         requestPayload,
         responsePayload: result.responsePayload as Prisma.InputJsonValue,
-        status: result.success ? IntegrationStatus.SUCCESS : IntegrationStatus.FAILED,
+        status: result.success
+          ? IntegrationStatus.SUCCESS
+          : IntegrationStatus.FAILED,
         failureReason: result.failureReason,
         retryCount: { increment: 1 },
         lastTriedAt: new Date(),

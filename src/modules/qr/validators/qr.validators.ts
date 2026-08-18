@@ -3,7 +3,13 @@ import {
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
-import { MerchantStatus, Prisma, QrType } from '@prisma/client';
+import {
+  IntegrationStatus,
+  IntegrationType,
+  MerchantStatus,
+  Prisma,
+  QrType,
+} from '@prisma/client';
 import { PrismaService } from '@infrastructure/database/prisma/prisma.service';
 import { TipsMerchantIdRepository } from '../domain/tips-merchant-id.repository';
 import { VALID_LIPA_NAMBA_BLOCKS } from '@shared/domain/alias/alias.constants';
@@ -68,6 +74,19 @@ export class QrValidators {
    * permanent 15-digit Merchant ID (tag 26/02) the first time — never
    * reassigned afterwards. Callable independently of validateMerchantForQr
    * since issuance services need this before a merchant alias exists.
+   *
+   * Bug fixed here: this used to always create the row with status:
+   * 'PENDING' and nothing anywhere ever advanced it — every TipsRegistration
+   * row was stuck at PENDING forever regardless of whether TIPS registration
+   * had actually succeeded. Fixed by checking MerchantIntegration (the
+   * record TpsRegistrationProvider actually writes on a real registration
+   * attempt) at creation time, rather than assuming success from which
+   * caller happens to invoke this — this method is reached from four
+   * different call sites (merchant onboarding, standalone QR
+   * (re)generation, and two school/student issuance paths) and not all of
+   * them are guaranteed to run after a merchant-level TPS registration has
+   * actually completed, so inferring status from caller position would be
+   * wrong for at least some of them.
    */
   async ensureTipsRegistration(
     merchantId: string,
@@ -89,8 +108,23 @@ export class QrValidators {
       tipsParticipantCode,
       tx,
     );
+    const tpsIntegration = await client.merchantIntegration.findFirst({
+      where: {
+        merchantId,
+        integrationType: IntegrationType.TPS,
+        status: IntegrationStatus.SUCCESS,
+      },
+      orderBy: { lastTriedAt: 'desc' },
+    });
     const created = await client.tipsRegistration.create({
-      data: { merchantId, acquirerId5, merchantId15, status: 'PENDING' },
+      data: {
+        merchantId,
+        acquirerId5,
+        merchantId15,
+        status: tpsIntegration ? 'REGISTERED' : 'PENDING',
+        registeredAt: tpsIntegration ? new Date() : undefined,
+        tipsDirectoryRef: tpsIntegration?.externalReferenceId ?? undefined,
+      },
     });
     return { acquirerId5: created.acquirerId5, merchantId15: created.merchantId15 };
   }

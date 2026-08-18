@@ -17,11 +17,12 @@ import { OnboardingAuditService } from './application/services/onboarding-audit.
 import { OnboardingDuplicateService } from './application/services/onboarding-duplicate.service';
 import { MerchantIssuanceService } from './application/services/merchant-issuance.service';
 import { IdentityVerificationService } from './application/services/identity-verification.service';
-import { TpsIntegrationAdapter } from './infrastructure/integrations/tps-integration.adapter';
 import { NidaVerificationProvider } from './application/ports/nida-verification.port';
 import { TraVerificationProvider } from './application/ports/tra-verification.port';
+import { TpsRegistrationProvider } from './application/ports/tps-registration.port';
 import { MockNidaVerificationProvider } from './infrastructure/services/mock-nida-verification.provider';
 import { MockTraVerificationProvider } from './infrastructure/services/mock-tra-verification.provider';
+import { MockTpsRegistrationProvider } from './infrastructure/services/mock-tps-registration.provider';
 import { ONBOARDING_HANDLERS } from './application/handlers/onboarding.handlers';
 import { ONBOARDING_PIPELINE_HANDLERS } from './application/handlers/onboarding-pipeline.handlers';
 
@@ -45,12 +46,15 @@ import { ONBOARDING_PIPELINE_HANDLERS } from './application/handlers/onboarding-
     OnboardingDuplicateService,
     MerchantIssuanceService,
     IdentityVerificationService,
-    TpsIntegrationAdapter,
     {
       provide: NidaVerificationProvider,
       useClass: MockNidaVerificationProvider,
     },
     { provide: TraVerificationProvider, useClass: MockTraVerificationProvider },
+    {
+      provide: TpsRegistrationProvider,
+      useClass: MockTpsRegistrationProvider,
+    },
     ...ONBOARDING_HANDLERS,
     ...ONBOARDING_PIPELINE_HANDLERS,
     {

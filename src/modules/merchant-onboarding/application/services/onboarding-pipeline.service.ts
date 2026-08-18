@@ -19,7 +19,7 @@ import {
 } from '../../domain/exceptions/onboarding.exceptions';
 import { OnboardingAuditService } from './onboarding-audit.service';
 import { OnboardingDuplicateService } from './onboarding-duplicate.service';
-import { TpsIntegrationAdapter } from '../../infrastructure/integrations/tps-integration.adapter';
+import { TpsRegistrationProvider } from '../ports/tps-registration.port';
 import { MerchantIssuanceService } from './merchant-issuance.service';
 import { ONBOARDING_STEPS } from '../../domain/constants/onboarding-steps';
 
@@ -31,7 +31,7 @@ export class OnboardingPipelineService {
     private readonly makerChecker: MakerCheckerService,
     private readonly audit: OnboardingAuditService,
     private readonly duplicates: OnboardingDuplicateService,
-    private readonly tps: TpsIntegrationAdapter,
+    private readonly tps: TpsRegistrationProvider,
     private readonly issuance: MerchantIssuanceService,
   ) {}
 
