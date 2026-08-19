@@ -410,6 +410,16 @@ const PERMISSIONS = [
     description: 'Resolve a reconciliation exception',
   },
   {
+    code: 'dispute:read',
+    module: 'disputes',
+    description: 'View disputes and their evidence',
+  },
+  {
+    code: 'dispute:write',
+    module: 'disputes',
+    description: 'Raise a dispute, attach evidence, initiate or resolve a refund',
+  },
+  {
     // Pre-existing gap: TransactionLimitPolicyController has required this
     // since brief §4.3.3 landed, but it was never added here — meaning no
     // role, not even SUPER_ADMIN, could actually reach those routes.
@@ -502,6 +512,8 @@ const ROLES: Array<{
       'fee-schedule:read',
       'fee-schedule:write',
       'fee-schedule:approve',
+      'dispute:read',
+      'dispute:write',
       'audit:read',
     ],
   },
@@ -525,6 +537,8 @@ const ROLES: Array<{
       'settlements:read',
       'reconciliation:read',
       'reconciliation:resolve',
+      'dispute:read',
+      'dispute:write',
     ],
   },
   {
@@ -548,6 +562,8 @@ const ROLES: Array<{
       'settlements:read',
       'qr:read',
       'alias:read',
+      'dispute:read',
+      'dispute:write',
     ],
   },
   {
@@ -562,6 +578,8 @@ const ROLES: Array<{
       'transactions:read',
       'qr:read',
       'alias:read',
+      'dispute:read',
+      'dispute:write',
     ],
   },
   {
@@ -591,6 +609,8 @@ const ROLES: Array<{
       'onboarding:submit',
       'transactions:read',
       'settlements:read',
+      'dispute:read',
+      'dispute:write',
     ],
   },
 ];

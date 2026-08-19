@@ -10,6 +10,8 @@ import { ONBOARDING_APPROVAL_PORT } from '../ports/onboarding-approval.port';
 import type { OnboardingApprovalPort } from '../ports/onboarding-approval.port';
 import { MERCHANT_STATUS_APPROVAL_PORT } from '../ports/merchant-status-approval.port';
 import type { MerchantStatusApprovalPort } from '../ports/merchant-status-approval.port';
+import { DISPUTE_REFUND_APPROVAL_PORT } from '../ports/dispute-refund-approval.port';
+import type { DisputeRefundApprovalPort } from '../ports/dispute-refund-approval.port';
 
 @CommandHandler(ApproveTaskCommand)
 export class ApproveTaskHandler implements ICommandHandler<ApproveTaskCommand> {
@@ -22,6 +24,9 @@ export class ApproveTaskHandler implements ICommandHandler<ApproveTaskCommand> {
     @Optional()
     @Inject(MERCHANT_STATUS_APPROVAL_PORT)
     private readonly merchantStatusApproval?: MerchantStatusApprovalPort,
+    @Optional()
+    @Inject(DISPUTE_REFUND_APPROVAL_PORT)
+    private readonly disputeRefundApproval?: DisputeRefundApprovalPort,
   ) {}
 
   async execute(command: ApproveTaskCommand) {
@@ -69,6 +74,16 @@ export class ApproveTaskHandler implements ICommandHandler<ApproveTaskCommand> {
       task.entityType === ApprovalEntityType.MERCHANT_STATUS_CHANGE
     ) {
       await this.merchantStatusApproval.onCheckerApproved(
+        task.entityId,
+        command.actor.sub,
+      );
+    }
+
+    if (
+      this.disputeRefundApproval &&
+      task.entityType === ApprovalEntityType.DISPUTE_REFUND
+    ) {
+      await this.disputeRefundApproval.onCheckerApproved(
         task.entityId,
         command.actor.sub,
       );

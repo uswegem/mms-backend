@@ -64,6 +64,9 @@ export enum Permission {
   // Reconciliation
   RECONCILIATION_READ = 'reconciliation:read',
   RECONCILIATION_RESOLVE = 'reconciliation:resolve',
+  // Disputes
+  DISPUTE_READ = 'dispute:read',
+  DISPUTE_WRITE = 'dispute:write',
   // Fee schedule / MDR configuration
   FEE_SCHEDULE_READ = 'fee-schedule:read',
   FEE_SCHEDULE_WRITE = 'fee-schedule:write',

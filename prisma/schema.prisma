@@ -197,6 +197,7 @@ enum ApprovalEntityType {
   MERCHANT_LIMIT
   CONFIG_CHANGE
   MERCHANT_STATUS_CHANGE
+  DISPUTE_REFUND
 
   @@map("approval_entity_type")
 }
@@ -319,6 +320,7 @@ model Acquirer {
   approvalPolicies ApprovalPolicy[]
   approvalTasks    ApprovalTask[]
   policyOverrides  PolicyOverride[]
+  disputes         Dispute[]
 
   @@map("acquirers")
 }
@@ -591,6 +593,7 @@ model Merchant {
   settlementCycles         SettlementCycle[]
   reconciliationExceptions ReconciliationException[]
   studentRosterUploads     StudentRosterUpload[]
+  disputes                 Dispute[]
 
   @@index([acquirerId, status], map: "idx_merchants_acquirer_status")
   @@index([tradingName], map: "idx_merchants_trading_name")
@@ -1565,6 +1568,7 @@ model Payment {
   acquirer        Acquirer         @relation(fields: [acquirerId], references: [id])
   merchant        Merchant         @relation(fields: [merchantId], references: [id])
   settlementCycle SettlementCycle? @relation(fields: [settlementCycleId], references: [id])
+  disputes        Dispute[]
 
   @@index([merchantId, status])
   @@index([merchantId, receivedAt])
@@ -1624,6 +1628,88 @@ model ReconciliationException {
   @@index([merchantId, status])
   @@index([cycleDate])
   @@map("reconciliation_exceptions")
+}
+
+enum DisputeReason {
+  DUPLICATE_PAYMENT
+  GOODS_NOT_RECEIVED
+  INCORRECT_AMOUNT
+  UNRECOGNIZED_TRANSACTION
+  OTHER
+
+  @@map("dispute_reason")
+}
+
+enum DisputeRaisedBy {
+  MERCHANT
+  PAYER
+  LFB_OPS
+
+  @@map("dispute_raised_by")
+}
+
+/// Investigation -> (EvidenceRequested) -> RefundPendingChecker (a real
+/// ApprovalTask, entityType DISPUTE_REFUND) -> ResolvedRefunded /
+/// ResolvedNoRefund, or Rejected if the checker declines the refund.
+enum DisputeStage {
+  INVESTIGATION
+  EVIDENCE_REQUESTED
+  REFUND_PENDING_CHECKER
+  RESOLVED_REFUNDED
+  RESOLVED_NO_REFUND
+  REJECTED
+
+  @@map("dispute_stage")
+}
+
+/// Handoff §disputes/§disputedet. Always tied to a real Payment — a
+/// dispute over "money that moved through TIPS" is the only kind this
+/// system tracks; there is no free-floating dispute with no transaction
+/// behind it.
+model Dispute {
+  id              String          @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  acquirerId      String          @map("acquirer_id") @db.Uuid
+  caseNo          String          @unique @map("case_no") @db.VarChar(20)
+  merchantId      String          @map("merchant_id") @db.Uuid
+  paymentId       String          @map("payment_id") @db.Uuid
+  raisedBy        DisputeRaisedBy @map("raised_by")
+  reason          DisputeReason
+  description     String          @db.Text
+  disputedAmount  Decimal         @map("disputed_amount") @db.Decimal(14, 2)
+  currency        String          @default("TZS") @db.Char(3)
+  stage           DisputeStage    @default(INVESTIGATION)
+  slaHours        Int             @default(72) @map("sla_hours")
+  resolutionNotes String?         @map("resolution_notes") @db.Text
+  resolvedAt      DateTime?       @map("resolved_at") @db.Timestamptz(6)
+  createdAt       DateTime        @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt       DateTime        @default(now()) @updatedAt @map("updated_at") @db.Timestamptz(6)
+  createdBy       String          @map("created_by") @db.Uuid
+
+  acquirer Acquirer          @relation(fields: [acquirerId], references: [id])
+  merchant Merchant          @relation(fields: [merchantId], references: [id])
+  payment  Payment           @relation(fields: [paymentId], references: [id])
+  evidence DisputeEvidence[]
+
+  @@index([merchantId, stage])
+  @@index([acquirerId, stage])
+  @@map("disputes")
+}
+
+model DisputeEvidence {
+  id         String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  disputeId  String   @map("dispute_id") @db.Uuid
+  fileName   String   @map("file_name") @db.VarChar(255)
+  s3Bucket   String   @map("s3_bucket") @db.VarChar(100)
+  s3Key      String   @map("s3_key") @db.Text
+  mimeType   String?  @map("mime_type") @db.VarChar(100)
+  fileSize   Int?     @map("file_size")
+  uploadedAt DateTime @default(now()) @map("uploaded_at") @db.Timestamptz(6)
+  uploadedBy String   @map("uploaded_by") @db.Uuid
+
+  dispute Dispute @relation(fields: [disputeId], references: [id], onDelete: Cascade)
+
+  @@index([disputeId])
+  @@map("dispute_evidence")
 }
 
 enum PolicyEffect {

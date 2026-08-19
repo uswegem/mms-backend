@@ -52,10 +52,16 @@ describe('MakerCheckerService — policy configuration (cfgmc)', () => {
           slaHours: 24,
           updatedAt: null,
         },
+        {
+          entityType: ApprovalEntityType.DISPUTE_REFUND,
+          enabled: true,
+          slaHours: 24,
+          updatedAt: null,
+        },
       ]);
     });
 
-    it('only queries the three entity types with a real workflow gate', async () => {
+    it('only queries the entity types with a real workflow gate', async () => {
       const { service, approvals } = buildService();
       approvals.listPolicies.mockResolvedValue([]);
 
@@ -65,6 +71,7 @@ describe('MakerCheckerService — policy configuration (cfgmc)', () => {
         ApprovalEntityType.MERCHANT_ONBOARDING,
         ApprovalEntityType.SCHOOL_ONBOARDING,
         ApprovalEntityType.MERCHANT_STATUS_CHANGE,
+        ApprovalEntityType.DISPUTE_REFUND,
       ]);
     });
   });

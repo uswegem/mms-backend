@@ -11,9 +11,10 @@ import {
 /**
  * Handoff §cfgmc: only these entity types have a real maker-checker gate
  * wired into a workflow (onboarding-pipeline.service.ts,
- * onboarding-workflow.service.ts, merchant-status-lifecycle.service.ts —
- * each calls isEnabled()/createTask() with one of exactly these three).
- * The other ApprovalEntityType enum values (SETTLEMENT_BATCH, FEE_RULE,
+ * onboarding-workflow.service.ts, merchant-status-lifecycle.service.ts,
+ * disputes.service.ts's initiateRefund — each calls isEnabled()/
+ * createTask() with one of exactly these four). The other
+ * ApprovalEntityType enum values (SETTLEMENT_BATCH, FEE_RULE,
  * MERCHANT_LIMIT, CONFIG_CHANGE) exist in the schema for future use but
  * nothing creates a task for them yet — toggling a policy for one of
  * those today would have zero effect, so cfgmc deliberately doesn't
@@ -23,6 +24,7 @@ const CONFIGURABLE_ENTITY_TYPES: ApprovalEntityType[] = [
   ApprovalEntityType.MERCHANT_ONBOARDING,
   ApprovalEntityType.SCHOOL_ONBOARDING,
   ApprovalEntityType.MERCHANT_STATUS_CHANGE,
+  ApprovalEntityType.DISPUTE_REFUND,
 ];
 
 @Injectable()
