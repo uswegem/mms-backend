@@ -1,4 +1,9 @@
-import { CommandHandler, ICommandHandler, IQueryHandler, QueryHandler } from '@nestjs/cqrs';
+import {
+  CommandHandler,
+  ICommandHandler,
+  IQueryHandler,
+  QueryHandler,
+} from '@nestjs/cqrs';
 import { AuditLogService } from '@infrastructure/audit/services/audit-log.service';
 import { ConfigService } from '@nestjs/config';
 import { OnboardingRepository } from '../../infrastructure/persistence/onboarding.repository';
@@ -6,18 +11,25 @@ import { OnboardingDuplicateService } from '../services/onboarding-duplicate.ser
 import { OnboardingWorkflowService } from '../services/onboarding-workflow.service';
 import { ReferenceDataService } from '@modules/reference-data/application/services/reference-data.service';
 import { IdentityVerificationService } from '../services/identity-verification.service';
-import { encryptIdNumber, resolveIdNumberKey } from '../../domain/id-number-crypto.util';
+import { FeeScheduleService } from '@modules/fee-schedules/application/services/fee-schedule.service';
+import {
+  encryptIdNumber,
+  resolveIdNumberKey,
+} from '../../domain/id-number-crypto.util';
+import { ONBOARDING_STEPS } from '../../domain/constants/onboarding-steps';
 import { toOnboardingResponse } from '../mappers/onboarding-response.mapper';
 import {
   OnboardingForbiddenException,
   OnboardingNotFoundException,
 } from '../../domain/exceptions/onboarding.exceptions';
 import {
+  AcceptFeeScheduleCommand,
   AddBeneficialOwnerCommand,
   AddOnboardingDocumentCommand,
   AmlScreenOnboardingCommand,
   AssignSettlementAccountCommand,
   CreateOnboardingApplicationCommand,
+  GetApplicationFeeScheduleQuery,
   GetOnboardingApplicationQuery,
   GetOnboardingTimelineQuery,
   ListOnboardingApplicationsQuery,
@@ -36,9 +48,7 @@ function assertAcquirer(actor: { acquirerId: string }, acquirerId: string) {
 }
 
 @CommandHandler(CreateOnboardingApplicationCommand)
-export class CreateOnboardingApplicationHandler
-  implements ICommandHandler<CreateOnboardingApplicationCommand>
-{
+export class CreateOnboardingApplicationHandler implements ICommandHandler<CreateOnboardingApplicationCommand> {
   constructor(
     private readonly onboarding: OnboardingRepository,
     private readonly duplicates: OnboardingDuplicateService,
@@ -83,16 +93,17 @@ export class CreateOnboardingApplicationHandler
       action: 'ONBOARDING_APPLICATION_CREATED',
       entityType: 'onboarding_application',
       entityId: app.id,
-      metadata: { applicationNo: app.applicationNo, legalEntityType: dto.legalEntityType },
+      metadata: {
+        applicationNo: app.applicationNo,
+        legalEntityType: dto.legalEntityType,
+      },
     });
     return toOnboardingResponse(app);
   }
 }
 
 @CommandHandler(UpdateOnboardingApplicationCommand)
-export class UpdateOnboardingApplicationHandler
-  implements ICommandHandler<UpdateOnboardingApplicationCommand>
-{
+export class UpdateOnboardingApplicationHandler implements ICommandHandler<UpdateOnboardingApplicationCommand> {
   constructor(private readonly onboarding: OnboardingRepository) {}
 
   async execute(command: UpdateOnboardingApplicationCommand) {
@@ -108,20 +119,24 @@ export class UpdateOnboardingApplicationHandler
 }
 
 @CommandHandler(AddOnboardingDocumentCommand)
-export class AddOnboardingDocumentHandler
-  implements ICommandHandler<AddOnboardingDocumentCommand>
-{
+export class AddOnboardingDocumentHandler implements ICommandHandler<AddOnboardingDocumentCommand> {
   constructor(private readonly onboarding: OnboardingRepository) {}
 
   async execute(command: AddOnboardingDocumentCommand) {
     const existing = await this.onboarding.findById(command.applicationId);
     if (!existing) throw new OnboardingNotFoundException(command.applicationId);
     assertAcquirer(command.actor, existing.acquirerId);
-    const doc = await this.onboarding.addDocument(command.applicationId, existing.merchantId, {
-      ...command.dto,
-      fileSize: command.dto.fileSize ? BigInt(command.dto.fileSize) : undefined,
-      createdBy: command.actor.sub,
-    });
+    const doc = await this.onboarding.addDocument(
+      command.applicationId,
+      existing.merchantId,
+      {
+        ...command.dto,
+        fileSize: command.dto.fileSize
+          ? BigInt(command.dto.fileSize)
+          : undefined,
+        createdBy: command.actor.sub,
+      },
+    );
     return {
       id: doc.id,
       docType: doc.docType,
@@ -132,9 +147,7 @@ export class AddOnboardingDocumentHandler
 }
 
 @CommandHandler(AddBeneficialOwnerCommand)
-export class AddBeneficialOwnerHandler
-  implements ICommandHandler<AddBeneficialOwnerCommand>
-{
+export class AddBeneficialOwnerHandler implements ICommandHandler<AddBeneficialOwnerCommand> {
   constructor(
     private readonly onboarding: OnboardingRepository,
     private readonly config: ConfigService,
@@ -160,9 +173,7 @@ export class AddBeneficialOwnerHandler
 }
 
 @CommandHandler(AssignSettlementAccountCommand)
-export class AssignSettlementAccountHandler
-  implements ICommandHandler<AssignSettlementAccountCommand>
-{
+export class AssignSettlementAccountHandler implements ICommandHandler<AssignSettlementAccountCommand> {
   constructor(
     private readonly onboarding: OnboardingRepository,
     private readonly referenceData: ReferenceDataService,
@@ -193,20 +204,19 @@ export class AssignSettlementAccountHandler
 }
 
 @CommandHandler(VerifySettlementCommand)
-export class VerifySettlementHandler
-  implements ICommandHandler<VerifySettlementCommand>
-{
+export class VerifySettlementHandler implements ICommandHandler<VerifySettlementCommand> {
   constructor(private readonly workflow: OnboardingWorkflowService) {}
 
   async execute(command: VerifySettlementCommand) {
-    return this.workflow.verifySettlement(command.applicationId, command.actor.sub);
+    return this.workflow.verifySettlement(
+      command.applicationId,
+      command.actor.sub,
+    );
   }
 }
 
 @CommandHandler(VerifyBeneficialOwnerNidaCommand)
-export class VerifyBeneficialOwnerNidaHandler
-  implements ICommandHandler<VerifyBeneficialOwnerNidaCommand>
-{
+export class VerifyBeneficialOwnerNidaHandler implements ICommandHandler<VerifyBeneficialOwnerNidaCommand> {
   constructor(private readonly identity: IdentityVerificationService) {}
 
   async execute(command: VerifyBeneficialOwnerNidaCommand) {
@@ -228,14 +238,15 @@ export class VerifyTinHandler implements ICommandHandler<VerifyTinCommand> {
 }
 
 @CommandHandler(AmlScreenOnboardingCommand)
-export class AmlScreenOnboardingHandler
-  implements ICommandHandler<AmlScreenOnboardingCommand>
-{
+export class AmlScreenOnboardingHandler implements ICommandHandler<AmlScreenOnboardingCommand> {
   constructor(private readonly workflow: OnboardingWorkflowService) {}
 
   async execute(command: AmlScreenOnboardingCommand) {
     const result = await this.workflow.runAmlScreen(command.applicationId);
-    return { result: result.result, screenedAt: result.screenedAt.toISOString() };
+    return {
+      result: result.result,
+      screenedAt: result.screenedAt.toISOString(),
+    };
   }
 }
 
@@ -262,9 +273,7 @@ export class SubmitOnboardingHandler implements ICommandHandler<SubmitOnboarding
 }
 
 @CommandHandler(MakerApproveOnboardingCommand)
-export class MakerApproveOnboardingHandler
-  implements ICommandHandler<MakerApproveOnboardingCommand>
-{
+export class MakerApproveOnboardingHandler implements ICommandHandler<MakerApproveOnboardingCommand> {
   constructor(
     private readonly workflow: OnboardingWorkflowService,
     private readonly onboarding: OnboardingRepository,
@@ -315,21 +324,20 @@ export class RejectOnboardingHandler implements ICommandHandler<RejectOnboarding
 }
 
 @CommandHandler(ResubmitOnboardingCommand)
-export class ResubmitOnboardingHandler
-  implements ICommandHandler<ResubmitOnboardingCommand>
-{
+export class ResubmitOnboardingHandler implements ICommandHandler<ResubmitOnboardingCommand> {
   constructor(private readonly workflow: OnboardingWorkflowService) {}
 
   async execute(command: ResubmitOnboardingCommand) {
-    const app = await this.workflow.resubmit(command.applicationId, command.actor.sub);
+    const app = await this.workflow.resubmit(
+      command.applicationId,
+      command.actor.sub,
+    );
     return toOnboardingResponse(app);
   }
 }
 
 @QueryHandler(ListOnboardingApplicationsQuery)
-export class ListOnboardingApplicationsHandler
-  implements IQueryHandler<ListOnboardingApplicationsQuery>
-{
+export class ListOnboardingApplicationsHandler implements IQueryHandler<ListOnboardingApplicationsQuery> {
   constructor(private readonly onboarding: OnboardingRepository) {}
 
   async execute(query: ListOnboardingApplicationsQuery) {
@@ -349,9 +357,7 @@ export class ListOnboardingApplicationsHandler
 }
 
 @QueryHandler(GetOnboardingApplicationQuery)
-export class GetOnboardingApplicationHandler
-  implements IQueryHandler<GetOnboardingApplicationQuery>
-{
+export class GetOnboardingApplicationHandler implements IQueryHandler<GetOnboardingApplicationQuery> {
   constructor(private readonly onboarding: OnboardingRepository) {}
 
   async execute(query: GetOnboardingApplicationQuery) {
@@ -363,9 +369,7 @@ export class GetOnboardingApplicationHandler
 }
 
 @QueryHandler(GetOnboardingTimelineQuery)
-export class GetOnboardingTimelineHandler
-  implements IQueryHandler<GetOnboardingTimelineQuery>
-{
+export class GetOnboardingTimelineHandler implements IQueryHandler<GetOnboardingTimelineQuery> {
   constructor(private readonly onboarding: OnboardingRepository) {}
 
   async execute(query: GetOnboardingTimelineQuery) {
@@ -408,6 +412,64 @@ export class GetOnboardingTimelineHandler
   }
 }
 
+@QueryHandler(GetApplicationFeeScheduleQuery)
+export class GetApplicationFeeScheduleHandler implements IQueryHandler<GetApplicationFeeScheduleQuery> {
+  constructor(
+    private readonly onboarding: OnboardingRepository,
+    private readonly feeSchedules: FeeScheduleService,
+  ) {}
+
+  async execute(query: GetApplicationFeeScheduleQuery) {
+    const app = await this.onboarding.findById(query.applicationId);
+    if (!app) throw new OnboardingNotFoundException(query.applicationId);
+    assertAcquirer(query.actor, app.acquirerId);
+
+    const schedule = await this.feeSchedules.resolveForMerchant(app.merchantId);
+    const acceptance = await this.feeSchedules.getAcceptance(
+      query.applicationId,
+      schedule.id,
+    );
+
+    return {
+      schedule,
+      accepted: !!acceptance,
+      acceptedAt: acceptance?.acceptedAt.toISOString() ?? null,
+    };
+  }
+}
+
+@CommandHandler(AcceptFeeScheduleCommand)
+export class AcceptFeeScheduleHandler implements ICommandHandler<AcceptFeeScheduleCommand> {
+  constructor(
+    private readonly onboarding: OnboardingRepository,
+    private readonly feeSchedules: FeeScheduleService,
+  ) {}
+
+  async execute(command: AcceptFeeScheduleCommand) {
+    const app = await this.onboarding.findById(command.applicationId);
+    if (!app) throw new OnboardingNotFoundException(command.applicationId);
+    assertAcquirer(command.actor, app.acquirerId);
+
+    const schedule = await this.feeSchedules.resolveForMerchant(app.merchantId);
+    const acceptance = await this.feeSchedules.recordAcceptance(
+      command.applicationId,
+      app.merchantId,
+      schedule.id,
+      command.actor.sub,
+    );
+    await this.onboarding.markStepComplete(
+      command.applicationId,
+      ONBOARDING_STEPS.FEE_SCHEDULE_DISCLOSURE,
+    );
+
+    return {
+      scheduleId: schedule.id,
+      version: schedule.version,
+      acceptedAt: acceptance.acceptedAt.toISOString(),
+    };
+  }
+}
+
 export const ONBOARDING_HANDLERS = [
   CreateOnboardingApplicationHandler,
   UpdateOnboardingApplicationHandler,
@@ -425,4 +487,6 @@ export const ONBOARDING_HANDLERS = [
   ListOnboardingApplicationsHandler,
   GetOnboardingApplicationHandler,
   GetOnboardingTimelineHandler,
+  GetApplicationFeeScheduleHandler,
+  AcceptFeeScheduleHandler,
 ];

@@ -139,6 +139,62 @@ async function seedTransactionLimitPolicies() {
   }
 }
 
+// ─── Fee schedule (handoff §ob7 / §cfgfees) ───────────────────────────────
+// PLACEHOLDER FIGURES — taken from the design handoff's own worked example
+// (§ob7's fee table), not confirmed by LFB Risk/Compliance/Pricing. Same
+// caveat as TRANSACTION_LIMIT_POLICIES above: replace via the fee-schedules
+// API before production, as a config change, not a code change. This seeds
+// only the DEFAULT (global fallback) schedule — MCC- and merchant-scoped
+// overrides are created later through that same API, not seeded.
+const DEFAULT_FEE_SCHEDULE_CHARGES: Array<{
+  chargeType:
+    | 'MDR'
+    | 'SETTLEMENT_TRANSFER'
+    | 'QR_POSTER_REPRINT'
+    | 'DISPUTE_INVESTIGATION';
+  basis:
+    | 'PERCENT_OF_TRANSACTION'
+    | 'FLAT_PER_SWEEP'
+    | 'FLAT_PER_ASSET'
+    | 'FLAT_PER_CASE';
+  rate?: number;
+  flatAmount?: number;
+  capAmount?: number;
+}> = [
+  { chargeType: 'MDR', basis: 'PERCENT_OF_TRANSACTION', rate: 0.0085, capAmount: 3000 },
+  { chargeType: 'SETTLEMENT_TRANSFER', basis: 'FLAT_PER_SWEEP', flatAmount: 0 },
+  { chargeType: 'QR_POSTER_REPRINT', basis: 'FLAT_PER_ASSET', flatAmount: 2000 },
+  { chargeType: 'DISPUTE_INVESTIGATION', basis: 'FLAT_PER_CASE', flatAmount: 5000 },
+];
+
+async function seedDefaultFeeSchedule(adminUserId: string) {
+  const existing = await prisma.feeSchedule.findFirst({
+    where: { scope: 'DEFAULT', status: 'ACTIVE' },
+  });
+  if (existing) {
+    console.log('  Fee schedule: DEFAULT already active, skipping');
+    return;
+  }
+
+  const version = (await prisma.feeSchedule.count()) + 1;
+  // createdBy === approvedBy only here, at bootstrap — the real activate
+  // endpoint rejects that (maker cannot approve their own draft).
+  await prisma.feeSchedule.create({
+    data: {
+      version,
+      scope: 'DEFAULT',
+      scopeKey: null,
+      status: 'ACTIVE',
+      effectiveFrom: new Date(),
+      createdBy: adminUserId,
+      approvedBy: adminUserId,
+      approvedAt: new Date(),
+      charges: { create: DEFAULT_FEE_SCHEDULE_CHARGES },
+    },
+  });
+  console.log(`  Fee schedule: DEFAULT v${version} seeded and activated`);
+}
+
 // Overridable via env so a real deploy (uat/prod) can bootstrap with its own
 // credential instead of this hardcoded dev default. Bootstrap-only: see the
 // authCredential upsert below, which never overwrites an existing hash — a
@@ -353,6 +409,29 @@ const PERMISSIONS = [
     module: 'reconciliation',
     description: 'Resolve a reconciliation exception',
   },
+  {
+    // Pre-existing gap: TransactionLimitPolicyController has required this
+    // since brief §4.3.3 landed, but it was never added here — meaning no
+    // role, not even SUPER_ADMIN, could actually reach those routes.
+    code: 'config:write',
+    module: 'config',
+    description: 'Manage system configuration (transaction limits, etc.)',
+  },
+  {
+    code: 'fee-schedule:read',
+    module: 'fee-schedule',
+    description: 'View fee schedules and MDR configuration',
+  },
+  {
+    code: 'fee-schedule:write',
+    module: 'fee-schedule',
+    description: 'Draft fee schedules',
+  },
+  {
+    code: 'fee-schedule:approve',
+    module: 'fee-schedule',
+    description: 'Activate a fee schedule (maker-checker: cannot activate own draft)',
+  },
   { code: 'audit:read', module: 'audit', description: 'Read audit logs' },
 ];
 
@@ -419,6 +498,10 @@ const ROLES: Array<{
       'settlements:approve',
       'reconciliation:read',
       'reconciliation:resolve',
+      'config:write',
+      'fee-schedule:read',
+      'fee-schedule:write',
+      'fee-schedule:approve',
       'audit:read',
     ],
   },
@@ -682,6 +765,8 @@ async function main() {
       },
     });
   }
+
+  await seedDefaultFeeSchedule(user.id);
 
   console.log('Seed complete');
   console.log(`  Acquirer: ${acquirer.code}`);

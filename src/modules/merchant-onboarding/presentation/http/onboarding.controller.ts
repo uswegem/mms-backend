@@ -30,9 +30,11 @@ import { AmlScreenOnboardingCommand } from '../../application/commands/aml-scree
 import { VerifySettlementCommand } from '../../application/commands/verify-settlement.command';
 import { VerifyBeneficialOwnerNidaCommand } from '../../application/commands/verify-beneficial-owner-nida.command';
 import { VerifyTinCommand } from '../../application/commands/verify-tin.command';
+import { AcceptFeeScheduleCommand } from '../../application/commands/accept-fee-schedule.command';
 import { ListOnboardingApplicationsQuery } from '../../application/queries/list-onboarding-applications.query';
 import { GetOnboardingApplicationQuery } from '../../application/queries/get-onboarding-application.query';
 import { GetOnboardingTimelineQuery } from '../../application/queries/get-onboarding-timeline.query';
+import { GetApplicationFeeScheduleQuery } from '../../application/queries/get-application-fee-schedule.query';
 import { GetOnboardingDashboardQuery } from '../../application/commands/onboarding-pipeline.commands';
 import {
   AddBeneficialOwnerDto,
@@ -200,6 +202,28 @@ export class OnboardingController {
     @Param('id', ParseUUIDPipe) id: string,
   ) {
     return this.commandBus.execute(new VerifySettlementCommand(toActor(user), id));
+  }
+
+  @Get(':id/fee-schedule')
+  @RequirePermissions(Permission.ONBOARDING_WRITE)
+  @ApiOperation({
+    summary: 'Resolve the fee schedule this application\'s merchant would be billed under (brief §4.3, Step 7)',
+  })
+  async getFeeSchedule(
+    @CurrentUser() user: JwtPayload,
+    @Param('id', ParseUUIDPipe) id: string,
+  ) {
+    return this.queryBus.execute(new GetApplicationFeeScheduleQuery(toActor(user), id));
+  }
+
+  @Post(':id/accept-fee-schedule')
+  @RequirePermissions(Permission.ONBOARDING_WRITE)
+  @ApiOperation({ summary: 'Record acceptance of the resolved fee schedule (brief §4.3, Step 7)' })
+  async acceptFeeSchedule(
+    @CurrentUser() user: JwtPayload,
+    @Param('id', ParseUUIDPipe) id: string,
+  ) {
+    return this.commandBus.execute(new AcceptFeeScheduleCommand(toActor(user), id));
   }
 
   @Post(':id/aml-screen')

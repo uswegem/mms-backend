@@ -2,6 +2,7 @@ import { Injectable, Logger, NotFoundException } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { Prisma, SettlementCycleStatus } from '@prisma/client';
 import { AuditLogService } from '@infrastructure/audit/services/audit-log.service';
+import { FeeScheduleService } from '@modules/fee-schedules/application/services/fee-schedule.service';
 import { SettlementsRepository } from '../../infrastructure/persistence/settlements.repository';
 import { CbsPostingProvider } from '../ports/cbs-posting.port';
 
@@ -21,6 +22,7 @@ export class SettlementsService {
     private readonly cbs: CbsPostingProvider,
     private readonly config: ConfigService,
     private readonly audit: AuditLogService,
+    private readonly feeSchedules: FeeScheduleService,
   ) {}
 
   /**
@@ -73,12 +75,11 @@ export class SettlementsService {
       (sum, p) => sum.plus(p.amount),
       new Prisma.Decimal(0),
     );
-    const mdrRate = merchant.settlementConfig?.mdr
-      ? new Prisma.Decimal(merchant.settlementConfig.mdr)
-      : new Prisma.Decimal(
-          this.config.get<number>('settlement.defaultMdrRate') ?? 0.0085,
-        );
-    const mdr = gross.times(mdrRate).toDecimalPlaces(2);
+    const mdr = merchant.settlementConfig?.mdr
+      ? gross
+          .times(new Prisma.Decimal(merchant.settlementConfig.mdr))
+          .toDecimalPlaces(2)
+      : await this.computeMdrFromSchedule(merchantId, gross);
     const net = gross.minus(mdr);
 
     const cycle = await this.settlements.createCycleWithPayments(
@@ -110,6 +111,39 @@ export class SettlementsService {
     });
 
     return cycle;
+  }
+
+  /**
+   * MDR from the merchant's resolved fee schedule (MERCHANT -> MCC ->
+   * DEFAULT), capped per the schedule's charge line if one is set. Falls
+   * back to the pre-fee-schedule global config default only if resolution
+   * itself fails (e.g. the fee-schedules seed hasn't run yet) — a config
+   * gap here must not stop the sweep.
+   */
+  private async computeMdrFromSchedule(
+    merchantId: string,
+    gross: Prisma.Decimal,
+  ): Promise<Prisma.Decimal> {
+    try {
+      const schedule = await this.feeSchedules.resolveForMerchant(merchantId);
+      const mdrCharge = this.feeSchedules.mdrCharge(schedule);
+      if (mdrCharge?.rate) {
+        const mdr = gross
+          .times(new Prisma.Decimal(mdrCharge.rate))
+          .toDecimalPlaces(2);
+        return mdrCharge.capAmount && mdr.gt(mdrCharge.capAmount)
+          ? new Prisma.Decimal(mdrCharge.capAmount)
+          : mdr;
+      }
+    } catch (err) {
+      this.logger.warn(
+        `Fee schedule resolution failed for merchant ${merchantId}, falling back to config default MDR: ${err instanceof Error ? err.message : err}`,
+      );
+    }
+    const fallbackRate = new Prisma.Decimal(
+      this.config.get<number>('settlement.defaultMdrRate') ?? 0.0085,
+    );
+    return gross.times(fallbackRate).toDecimalPlaces(2);
   }
 
   private async postCycle(cycleId: string): Promise<void> {

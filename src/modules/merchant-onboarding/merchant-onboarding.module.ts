@@ -7,6 +7,7 @@ import { CbsModule } from '@modules/cbs/cbs.module';
 import { AliasModule } from '@modules/alias/alias.module';
 import { QrModule } from '@modules/qr/qr.module';
 import { ReferenceDataModule } from '@modules/reference-data/reference-data.module';
+import { FeeSchedulesModule } from '@modules/fee-schedules/fee-schedules.module';
 import { ONBOARDING_APPROVAL_PORT } from '@modules/maker-checker/application/ports/onboarding-approval.port';
 import { OnboardingController } from './presentation/http/onboarding.controller';
 import { MerchantOnboardingAliasController } from './presentation/http/merchant-onboarding-alias.controller';
@@ -36,6 +37,7 @@ import { ONBOARDING_PIPELINE_HANDLERS } from './application/handlers/onboarding-
     AliasModule,
     QrModule,
     ReferenceDataModule,
+    FeeSchedulesModule,
   ],
   controllers: [OnboardingController, MerchantOnboardingAliasController],
   providers: [

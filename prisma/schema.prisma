@@ -311,14 +311,14 @@ model Acquirer {
   deletedAt           DateTime? @map("deleted_at") @db.Timestamptz(6)
   deletedBy           String?   @map("deleted_by") @db.Uuid
 
-  users                User[]
-  merchants            Merchant[]
-  payments             Payment[]
-  roles                Role[]
-  onboardingApps       OnboardingApplication[]
-  approvalPolicies     ApprovalPolicy[]
-  approvalTasks        ApprovalTask[]
-  policyOverrides      PolicyOverride[]
+  users            User[]
+  merchants        Merchant[]
+  payments         Payment[]
+  roles            Role[]
+  onboardingApps   OnboardingApplication[]
+  approvalPolicies ApprovalPolicy[]
+  approvalTasks    ApprovalTask[]
+  policyOverrides  PolicyOverride[]
 
   @@map("acquirers")
 }
@@ -345,7 +345,7 @@ model User {
   refreshTokens       RefreshToken[]
   passwordResetTokens PasswordResetToken[]
   userRoles           UserRole[]
-  invitationsSent     UserInvitation[] @relation("InvitedBy")
+  invitationsSent     UserInvitation[]     @relation("InvitedBy")
   policyOverrides     PolicyOverride[]
 
   @@unique([acquirerId, email])
@@ -387,32 +387,32 @@ model UserInvitation {
 }
 
 model AuthCredential {
-  userId            String       @id @map("user_id") @db.Uuid
-  passwordHash      String       @map("password_hash") @db.VarChar(255)
+  userId                String       @id @map("user_id") @db.Uuid
+  passwordHash          String       @map("password_hash") @db.VarChar(255)
   /// Defaults to BCRYPT to correctly reflect every row that existed before
   /// the Argon2id migration shipped; every write path that produces a fresh
   /// hash (login rehash, reset, new-user creation) sets ARGON2ID explicitly
   /// — the default is never relied on for "this is a new hash" semantics.
-  passwordAlgo      PasswordAlgo @default(BCRYPT) @map("password_algo")
+  passwordAlgo          PasswordAlgo @default(BCRYPT) @map("password_algo")
   /// Set when a BCRYPT hash is lazily rehashed to Argon2id on login, or when
   /// a forced reset completes. Null means still on the original algorithm.
-  passwordMigratedAt DateTime?   @map("password_migrated_at") @db.Timestamptz(6)
+  passwordMigratedAt    DateTime?    @map("password_migrated_at") @db.Timestamptz(6)
   /// When true, valid credentials are not enough to obtain a session — the
   /// login flow routes to forced password reset instead. Set at Argon2id
   /// migration cutover for privileged accounts, and by the 90-day backstop
   /// job for any account still on BCRYPT past the deadline.
-  mustResetPassword Boolean      @default(false) @map("must_reset_password")
+  mustResetPassword     Boolean      @default(false) @map("must_reset_password")
   /// Set the first time the 90-day-backstop warning email goes out, so the
   /// daily job sends it once per user instead of every run during the
   /// warning window.
-  passwordResetWarnedAt DateTime? @map("password_reset_warned_at") @db.Timestamptz(6)
-  mfaSecretEnc      Bytes?    @map("mfa_secret_enc")
-  mfaEnabled        Boolean   @default(false) @map("mfa_enabled")
-  failedAttempts    Int       @default(0) @map("failed_attempts") @db.SmallInt
-  lockoutUntil      DateTime? @map("lockout_until") @db.Timestamptz(6)
-  passwordChangedAt DateTime? @map("password_changed_at") @db.Timestamptz(6)
-  createdAt         DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
-  updatedAt         DateTime  @default(now()) @updatedAt @map("updated_at") @db.Timestamptz(6)
+  passwordResetWarnedAt DateTime?    @map("password_reset_warned_at") @db.Timestamptz(6)
+  mfaSecretEnc          Bytes?       @map("mfa_secret_enc")
+  mfaEnabled            Boolean      @default(false) @map("mfa_enabled")
+  failedAttempts        Int          @default(0) @map("failed_attempts") @db.SmallInt
+  lockoutUntil          DateTime?    @map("lockout_until") @db.Timestamptz(6)
+  passwordChangedAt     DateTime?    @map("password_changed_at") @db.Timestamptz(6)
+  createdAt             DateTime     @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt             DateTime     @default(now()) @updatedAt @map("updated_at") @db.Timestamptz(6)
 
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
 
@@ -490,8 +490,8 @@ model Role {
 
   acquirer    Acquirer?        @relation(fields: [acquirerId], references: [id])
   permissions RolePermission[]
-  userRoles     UserRole[]
-  invitations   UserInvitation[]
+  userRoles   UserRole[]
+  invitations UserInvitation[]
 
   @@unique([acquirerId, code])
   @@map("roles")
@@ -526,68 +526,68 @@ model UserRole {
 }
 
 model Merchant {
-  id          String         @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  acquirerId  String         @map("acquirer_id") @db.Uuid
-  merchantCode String?       @unique @map("merchant_code") @db.VarChar(30)
-  legalName   String         @map("legal_name") @db.VarChar(255)
-  tradingName String         @map("trading_name") @db.VarChar(100)
-  displayName String?        @map("display_name") @db.VarChar(100)
-  status      MerchantStatus @default(DRAFT)
-  mcc         String         @default("0000") @db.Char(4)
-  businessCategory String?   @map("business_category") @db.VarChar(100)
-  taxId       String?        @map("tax_id") @db.VarChar(50)
-  vrn         String?        @db.VarChar(20)
-  licenseNumber String?      @map("license_number") @db.VarChar(50)
-  pan         String?        @db.VarChar(20)
-  gstin       String?        @db.VarChar(20)
-  contactPerson String?      @map("contact_person") @db.VarChar(255)
-  relationshipManager String? @map("relationship_manager") @db.VarChar(100)
-  branch      String?        @db.VarChar(100)
-  sourceChannel String?      @map("source_channel") @db.VarChar(50)
-  isSchool    Boolean        @default(false) @map("is_school")
+  id                  String         @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  acquirerId          String         @map("acquirer_id") @db.Uuid
+  merchantCode        String?        @unique @map("merchant_code") @db.VarChar(30)
+  legalName           String         @map("legal_name") @db.VarChar(255)
+  tradingName         String         @map("trading_name") @db.VarChar(100)
+  displayName         String?        @map("display_name") @db.VarChar(100)
+  status              MerchantStatus @default(DRAFT)
+  mcc                 String         @default("0000") @db.Char(4)
+  businessCategory    String?        @map("business_category") @db.VarChar(100)
+  taxId               String?        @map("tax_id") @db.VarChar(50)
+  vrn                 String?        @db.VarChar(20)
+  licenseNumber       String?        @map("license_number") @db.VarChar(50)
+  pan                 String?        @db.VarChar(20)
+  gstin               String?        @db.VarChar(20)
+  contactPerson       String?        @map("contact_person") @db.VarChar(255)
+  relationshipManager String?        @map("relationship_manager") @db.VarChar(100)
+  branch              String?        @db.VarChar(100)
+  sourceChannel       String?        @map("source_channel") @db.VarChar(50)
+  isSchool            Boolean        @default(false) @map("is_school")
   /// Brief §4.3.3. Defaulted at the DB level to TIER_2 only as a NOT NULL
   /// safety net — every merchant-creation write path (ad-hoc admin create
   /// and the onboarding pipeline) sets this explicitly from isSchool
   /// (TIER_3 for schools, TIER_2 otherwise) rather than relying on the
   /// column default.
-  kycTier     KycTier        @default(TIER_2) @map("kyc_tier")
-  onboardedAt DateTime?      @map("onboarded_at") @db.Timestamptz(6)
-  activatedAt DateTime?      @map("activated_at") @db.Timestamptz(6)
-  createdAt   DateTime       @default(now()) @map("created_at") @db.Timestamptz(6)
-  updatedAt   DateTime       @default(now()) @updatedAt @map("updated_at") @db.Timestamptz(6)
-  createdBy   String?        @map("created_by") @db.Uuid
-  updatedBy   String?        @map("updated_by") @db.Uuid
-  deletedAt   DateTime?      @map("deleted_at") @db.Timestamptz(6)
-  deletedBy   String?        @map("deleted_by") @db.Uuid
+  kycTier             KycTier        @default(TIER_2) @map("kyc_tier")
+  onboardedAt         DateTime?      @map("onboarded_at") @db.Timestamptz(6)
+  activatedAt         DateTime?      @map("activated_at") @db.Timestamptz(6)
+  createdAt           DateTime       @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt           DateTime       @default(now()) @updatedAt @map("updated_at") @db.Timestamptz(6)
+  createdBy           String?        @map("created_by") @db.Uuid
+  updatedBy           String?        @map("updated_by") @db.Uuid
+  deletedAt           DateTime?      @map("deleted_at") @db.Timestamptz(6)
+  deletedBy           String?        @map("deleted_by") @db.Uuid
 
   pendingStatusAction      MerchantStatusAction? @map("pending_status_action")
   pendingStatusReason      String?               @map("pending_status_reason") @db.VarChar(255)
   pendingStatusRequestedBy String?               @map("pending_status_requested_by") @db.Uuid
   pendingStatusRequestedAt DateTime?             @map("pending_status_requested_at") @db.Timestamptz(6)
 
-  acquirer  Acquirer           @relation(fields: [acquirerId], references: [id])
-  users     User[]
-  payments  Payment[]
-  profile              MerchantProfile?
-  kyc                  MerchantKyc?
-  documents            MerchantDocument[]
-  reviews              MerchantKycReview[]
-  onboardingApps       OnboardingApplication[]
-  settlementAccounts   SettlementAccount[]
-  cbsVerifications     CbsAccountVerification[]
-  school               School?
-  statusHistory        MerchantStatusHistory[]
-  merchantAlias        MerchantAlias?
-  schoolSequence       SchoolSequence?
-  students             Student[]
-  studentAliases       StudentAlias[]
-  qrCodes              QrCode[]
-  tipsRegistration     TipsRegistration?
-  riskReviews          MerchantRiskReview[]
-  integrations         MerchantIntegration[]
-  stores               MerchantStore[]
-  settlementConfig     MerchantSettlementConfig?
-  onboardingAuditLogs  OnboardingAuditLog[]
+  acquirer                 Acquirer                  @relation(fields: [acquirerId], references: [id])
+  users                    User[]
+  payments                 Payment[]
+  profile                  MerchantProfile?
+  kyc                      MerchantKyc?
+  documents                MerchantDocument[]
+  reviews                  MerchantKycReview[]
+  onboardingApps           OnboardingApplication[]
+  settlementAccounts       SettlementAccount[]
+  cbsVerifications         CbsAccountVerification[]
+  school                   School?
+  statusHistory            MerchantStatusHistory[]
+  merchantAlias            MerchantAlias?
+  schoolSequence           SchoolSequence?
+  students                 Student[]
+  studentAliases           StudentAlias[]
+  qrCodes                  QrCode[]
+  tipsRegistration         TipsRegistration?
+  riskReviews              MerchantRiskReview[]
+  integrations             MerchantIntegration[]
+  stores                   MerchantStore[]
+  settlementConfig         MerchantSettlementConfig?
+  onboardingAuditLogs      OnboardingAuditLog[]
   settlementCycles         SettlementCycle[]
   reconciliationExceptions ReconciliationException[]
   studentRosterUploads     StudentRosterUpload[]
@@ -631,19 +631,19 @@ model MerchantStatusHistory {
 }
 
 model MerchantProfile {
-  merchantId    String   @id @map("merchant_id") @db.Uuid
-  addressLine1  String?  @map("address_line1") @db.VarChar(255)
-  addressLine2  String?  @map("address_line2") @db.VarChar(255)
-  region        String?  @db.VarChar(100)
-  district      String?  @db.VarChar(100)
-  ward          String?  @db.VarChar(100)
-  city          String?  @db.VarChar(100)
-  postalCode    String   @map("postal_code") @db.Char(5)
-  countryCode   String   @default("TZ") @map("country_code") @db.Char(2)
-  contactPhone  String?  @map("contact_phone") @db.VarChar(20)
-  contactEmail  String?  @map("contact_email") @db.Citext
-  createdAt     DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
-  updatedAt     DateTime @default(now()) @updatedAt @map("updated_at") @db.Timestamptz(6)
+  merchantId   String   @id @map("merchant_id") @db.Uuid
+  addressLine1 String?  @map("address_line1") @db.VarChar(255)
+  addressLine2 String?  @map("address_line2") @db.VarChar(255)
+  region       String?  @db.VarChar(100)
+  district     String?  @db.VarChar(100)
+  ward         String?  @db.VarChar(100)
+  city         String?  @db.VarChar(100)
+  postalCode   String   @map("postal_code") @db.Char(5)
+  countryCode  String   @default("TZ") @map("country_code") @db.Char(2)
+  contactPhone String?  @map("contact_phone") @db.VarChar(20)
+  contactEmail String?  @map("contact_email") @db.Citext
+  createdAt    DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt    DateTime @default(now()) @updatedAt @map("updated_at") @db.Timestamptz(6)
 
   merchant Merchant @relation(fields: [merchantId], references: [id], onDelete: Cascade)
 
@@ -689,7 +689,7 @@ model ReferenceWard {
   // ReferenceDataService.validateLocation() flags it explicitly as a known
   // data anomaly if a merchant is ever registered against that ward, rather
   // than let it fail as an opaque DB error against the narrower column.
-  postcode String @db.VarChar(6)
+  postcode   String @db.VarChar(6)
 
   district ReferenceDistrict @relation(fields: [districtId], references: [id], onDelete: Cascade)
 
@@ -737,7 +737,7 @@ model MerchantDocument {
   deletedAt          DateTime?                  @map("deleted_at") @db.Timestamptz(6)
   deletedBy          String?                    @map("deleted_by") @db.Uuid
 
-  merchant      Merchant                  @relation(fields: [merchantId], references: [id], onDelete: Cascade)
+  merchant       Merchant                  @relation(fields: [merchantId], references: [id], onDelete: Cascade)
   kycSubmissions OnboardingKycSubmission[]
 
   @@index([merchantId])
@@ -792,19 +792,20 @@ model OnboardingApplication {
   deletedAt             DateTime?        @map("deleted_at") @db.Timestamptz(6)
   deletedBy             String?          @map("deleted_by") @db.Uuid
 
-  acquirer         Acquirer                   @relation(fields: [acquirerId], references: [id])
-  merchant         Merchant                   @relation(fields: [merchantId], references: [id])
-  rejectionReason  OnboardingRejectionReason? @relation(fields: [rejectionCode], references: [code])
-  steps            OnboardingStep[]
-  kycSubmissions   OnboardingKycSubmission[]
-  kycReviews       OnboardingKycReview[]
-  beneficialOwners BeneficialOwner[]
-  amlResults       AmlScreeningResult[]
-  riskReviews      MerchantRiskReview[]
-  approvals        MerchantOnboardingApproval[]
-  auditLogs        OnboardingAuditLog[]
-  nidaVerifications NidaVerificationResult[]
-  traVerifications  TraVerificationResult[]
+  acquirer               Acquirer                     @relation(fields: [acquirerId], references: [id])
+  merchant               Merchant                     @relation(fields: [merchantId], references: [id])
+  rejectionReason        OnboardingRejectionReason?   @relation(fields: [rejectionCode], references: [code])
+  steps                  OnboardingStep[]
+  kycSubmissions         OnboardingKycSubmission[]
+  kycReviews             OnboardingKycReview[]
+  beneficialOwners       BeneficialOwner[]
+  amlResults             AmlScreeningResult[]
+  riskReviews            MerchantRiskReview[]
+  approvals              MerchantOnboardingApproval[]
+  auditLogs              OnboardingAuditLog[]
+  nidaVerifications      NidaVerificationResult[]
+  traVerifications       TraVerificationResult[]
+  feeScheduleAcceptances FeeScheduleAcceptance[]
 
   @@unique([acquirerId, applicationNo])
   @@index([acquirerId, status])
@@ -861,7 +862,7 @@ model BeneficialOwner {
   deletedAt     DateTime? @map("deleted_at") @db.Timestamptz(6)
   deletedBy     String?   @map("deleted_by") @db.Uuid
 
-  application       OnboardingApplication     @relation(fields: [applicationId], references: [id], onDelete: Cascade)
+  application       OnboardingApplication    @relation(fields: [applicationId], references: [id], onDelete: Cascade)
   nidaVerifications NidaVerificationResult[]
 
   @@map("beneficial_owners")
@@ -972,18 +973,18 @@ model CbsAccountVerification {
 }
 
 model MerchantRiskReview {
-  id             String           @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  applicationId  String           @map("application_id") @db.Uuid
-  merchantId     String           @map("merchant_id") @db.Uuid
-  riskScore      Int?             @map("risk_score")
-  riskLevel      String?          @map("risk_level") @db.VarChar(20)
-  duplicateFlag  Boolean          @default(false) @map("duplicate_flag")
-  blacklistFlag  Boolean          @default(false) @map("blacklist_flag")
-  remarks        String?          @db.Text
-  status         RiskReviewStatus @default(PENDING)
-  reviewedBy     String?          @map("reviewed_by") @db.Uuid
-  reviewedAt     DateTime?        @map("reviewed_at") @db.Timestamptz(6)
-  createdAt      DateTime         @default(now()) @map("created_at") @db.Timestamptz(6)
+  id            String           @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  applicationId String           @map("application_id") @db.Uuid
+  merchantId    String           @map("merchant_id") @db.Uuid
+  riskScore     Int?             @map("risk_score")
+  riskLevel     String?          @map("risk_level") @db.VarChar(20)
+  duplicateFlag Boolean          @default(false) @map("duplicate_flag")
+  blacklistFlag Boolean          @default(false) @map("blacklist_flag")
+  remarks       String?          @db.Text
+  status        RiskReviewStatus @default(PENDING)
+  reviewedBy    String?          @map("reviewed_by") @db.Uuid
+  reviewedAt    DateTime?        @map("reviewed_at") @db.Timestamptz(6)
+  createdAt     DateTime         @default(now()) @map("created_at") @db.Timestamptz(6)
 
   application OnboardingApplication @relation(fields: [applicationId], references: [id], onDelete: Cascade)
   merchant    Merchant              @relation(fields: [merchantId], references: [id], onDelete: Cascade)
@@ -1043,6 +1044,115 @@ model MerchantStore {
 /// not yet set (open question: LFB Risk/Compliance owns this number, not
 /// engineering) and are expected to be a config change, not a code change,
 /// once confirmed.
+/// Brief §4.3 / handoff §cfgfees: "MDR and transaction fees are configured
+/// per merchant category, per segment, or as an individual merchant
+/// override in system configuration." Scope + scopeKey together select
+/// which merchants a schedule applies to; resolution order (most specific
+/// wins) is MERCHANT -> MCC -> DEFAULT, implemented in
+/// FeeScheduleService.resolveForMerchant, not here.
+enum FeeScheduleScope {
+  DEFAULT
+  MCC
+  MERCHANT
+
+  @@map("fee_schedule_scope")
+}
+
+enum FeeScheduleStatus {
+  DRAFT
+  ACTIVE
+  SUPERSEDED
+
+  @@map("fee_schedule_status")
+}
+
+enum FeeChargeType {
+  MDR
+  SETTLEMENT_TRANSFER
+  QR_POSTER_REPRINT
+  DISPUTE_INVESTIGATION
+
+  @@map("fee_charge_type")
+}
+
+enum FeeChargeBasis {
+  PERCENT_OF_TRANSACTION
+  FLAT_PER_SWEEP
+  FLAT_PER_ASSET
+  FLAT_PER_CASE
+
+  @@map("fee_charge_basis")
+}
+
+/// One version of a fee schedule for one scope. `version` is a single
+/// monotonic counter shared across every schedule (not per-scope) purely
+/// so the applicant-facing label ("SCHEDULE v4") means the same thing
+/// everywhere — it is not used for resolution, `status` is. Activating a
+/// new schedule for a scope+scopeKey that already has an ACTIVE row
+/// supersedes the old one (status -> SUPERSEDED) rather than deleting it,
+/// since past settlements reference the schedule version in force at
+/// transaction time (handoff §ob7).
+model FeeSchedule {
+  id            String            @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  version       Int
+  scope         FeeScheduleScope
+  /// MCC code for scope=MCC, merchantId (as text) for scope=MERCHANT, null for DEFAULT.
+  scopeKey      String?           @map("scope_key") @db.VarChar(50)
+  status        FeeScheduleStatus @default(DRAFT)
+  effectiveFrom DateTime?         @map("effective_from") @db.Timestamptz(6)
+  supersededAt  DateTime?         @map("superseded_at") @db.Timestamptz(6)
+  createdBy     String            @map("created_by") @db.Uuid
+  createdAt     DateTime          @default(now()) @map("created_at") @db.Timestamptz(6)
+  approvedBy    String?           @map("approved_by") @db.Uuid
+  approvedAt    DateTime?         @map("approved_at") @db.Timestamptz(6)
+
+  charges     FeeScheduleCharge[]
+  acceptances FeeScheduleAcceptance[]
+
+  @@unique([scope, scopeKey, version])
+  @@index([scope, scopeKey, status])
+  @@map("fee_schedules")
+}
+
+model FeeScheduleCharge {
+  id         String         @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  scheduleId String         @map("schedule_id") @db.Uuid
+  chargeType FeeChargeType  @map("charge_type")
+  basis      FeeChargeBasis
+  /// Rate as a fraction (0.0085 = 0.85%) — only set for PERCENT_OF_TRANSACTION.
+  rate       Decimal?       @db.Decimal(6, 4)
+  /// Flat TZS amount — only set for the FLAT_PER_* bases.
+  flatAmount Decimal?       @map("flat_amount") @db.Decimal(12, 2)
+  /// Optional ceiling on the computed charge (percent-based charges only).
+  capAmount  Decimal?       @map("cap_amount") @db.Decimal(12, 2)
+
+  schedule FeeSchedule @relation(fields: [scheduleId], references: [id], onDelete: Cascade)
+
+  @@index([scheduleId])
+  @@map("fee_schedule_charges")
+}
+
+/// Handoff §ob7: the applicant's acknowledgement that they've seen and
+/// accepted a specific schedule version, shown back to the checker at
+/// review. One row per (application, schedule) — re-verifying after a
+/// TIN/account correction does not require re-accepting fees, but
+/// accepting a *different* schedule version does.
+model FeeScheduleAcceptance {
+  id            String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  applicationId String   @map("application_id") @db.Uuid
+  scheduleId    String   @map("schedule_id") @db.Uuid
+  merchantId    String   @map("merchant_id") @db.Uuid
+  acceptedBy    String?  @map("accepted_by") @db.Uuid
+  acceptedAt    DateTime @default(now()) @map("accepted_at") @db.Timestamptz(6)
+
+  application OnboardingApplication @relation(fields: [applicationId], references: [id], onDelete: Cascade)
+  schedule    FeeSchedule           @relation(fields: [scheduleId], references: [id])
+
+  @@unique([applicationId, scheduleId])
+  @@index([merchantId])
+  @@map("fee_schedule_acceptances")
+}
+
 model TransactionLimitPolicy {
   id                  String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
   tier                KycTier  @unique
@@ -1081,15 +1191,15 @@ model MerchantSettlementConfig {
 }
 
 model MerchantOnboardingApproval {
-  id             String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  applicationId  String   @map("application_id") @db.Uuid
-  approvalType   String   @map("approval_type") @db.VarChar(50)
-  status         String   @db.VarChar(20)
-  assignedToRole String?  @map("assigned_to_role") @db.VarChar(50)
-  actionBy       String?  @map("action_by") @db.Uuid
+  id             String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  applicationId  String    @map("application_id") @db.Uuid
+  approvalType   String    @map("approval_type") @db.VarChar(50)
+  status         String    @db.VarChar(20)
+  assignedToRole String?   @map("assigned_to_role") @db.VarChar(50)
+  actionBy       String?   @map("action_by") @db.Uuid
   actionAt       DateTime? @map("action_at") @db.Timestamptz(6)
-  remarks        String?  @db.Text
-  createdAt      DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  remarks        String?   @db.Text
+  createdAt      DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
 
   application OnboardingApplication @relation(fields: [applicationId], references: [id], onDelete: Cascade)
 
@@ -1143,7 +1253,7 @@ model ApprovalTask {
   createdAt  DateTime           @default(now()) @map("created_at") @db.Timestamptz(6)
   updatedAt  DateTime           @default(now()) @updatedAt @map("updated_at") @db.Timestamptz(6)
 
-  acquirer Acquirer           @relation(fields: [acquirerId], references: [id])
+  acquirer Acquirer          @relation(fields: [acquirerId], references: [id])
   decision ApprovalDecision?
 
   @@index([acquirerId, status])
@@ -1165,16 +1275,16 @@ model ApprovalDecision {
 }
 
 model School {
-  merchantId       String   @id @map("merchant_id") @db.Uuid
-  registrationNo   String?  @map("registration_no") @db.VarChar(50)
-  headName         String?  @map("head_name") @db.VarChar(255)
-  contactPhone     String?  @map("contact_phone") @db.VarChar(20)
-  contactEmail     String?  @map("contact_email") @db.Citext
-  bursarName       String?  @map("bursar_name") @db.VarChar(255)
-  bursarPhone      String?  @map("bursar_phone") @db.VarChar(20)
-  address          String?  @db.VarChar(500)
-  createdAt        DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
-  updatedAt        DateTime @default(now()) @updatedAt @map("updated_at") @db.Timestamptz(6)
+  merchantId     String   @id @map("merchant_id") @db.Uuid
+  registrationNo String?  @map("registration_no") @db.VarChar(50)
+  headName       String?  @map("head_name") @db.VarChar(255)
+  contactPhone   String?  @map("contact_phone") @db.VarChar(20)
+  contactEmail   String?  @map("contact_email") @db.Citext
+  bursarName     String?  @map("bursar_name") @db.VarChar(255)
+  bursarPhone    String?  @map("bursar_phone") @db.VarChar(20)
+  address        String?  @db.VarChar(500)
+  createdAt      DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt      DateTime @default(now()) @updatedAt @map("updated_at") @db.Timestamptz(6)
 
   merchant Merchant @relation(fields: [merchantId], references: [id], onDelete: Cascade)
 
@@ -1238,9 +1348,9 @@ model MerchantAlias {
 }
 
 model SchoolSequence {
-  merchantId     String @id @map("merchant_id") @db.Uuid
-  schoolSeq3     String @map("school_seq_3") @db.Char(3)
-  lastStudentSeq Int    @default(0) @map("last_student_seq")
+  merchantId     String   @id @map("merchant_id") @db.Uuid
+  schoolSeq3     String   @map("school_seq_3") @db.Char(3)
+  lastStudentSeq Int      @default(0) @map("last_student_seq")
   createdAt      DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
   updatedAt      DateTime @default(now()) @updatedAt @map("updated_at") @db.Timestamptz(6)
 
@@ -1301,20 +1411,20 @@ model StudentRosterUpload {
 }
 
 model StudentAlias {
-  id            String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  studentId     String   @unique @map("student_id") @db.Uuid
-  merchantId    String   @map("merchant_id") @db.Uuid
+  id             String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  studentId      String   @unique @map("student_id") @db.Uuid
+  merchantId     String   @map("merchant_id") @db.Uuid
   /// 10-digit public alias: [780][globalSeq6][DammCheck1]
-  alias10digit  String   @unique @map("alias_10digit") @db.Char(10)
+  alias10digit   String   @unique @map("alias_10digit") @db.Char(10)
   /// Always '780' — stored for structural parity with MerchantAlias.
-  acquirerCode3 String   @map("acquirer_code_3") @db.Char(3)
+  acquirerCode3  String   @map("acquirer_code_3") @db.Char(3)
   /// 6-digit zero-padded slot from the flat global student alias sequence.
-  aliasSeq6     String   @map("alias_seq_6") @db.Char(6)
-  tipsRegistered Boolean @default(false) @map("tips_registered")
-  isActive      Boolean  @default(true) @map("is_active")
-  qrCodeId      String?  @map("qr_code_id") @db.Uuid
-  createdAt     DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
-  updatedAt     DateTime @default(now()) @updatedAt @map("updated_at") @db.Timestamptz(6)
+  aliasSeq6      String   @map("alias_seq_6") @db.Char(6)
+  tipsRegistered Boolean  @default(false) @map("tips_registered")
+  isActive       Boolean  @default(true) @map("is_active")
+  qrCodeId       String?  @map("qr_code_id") @db.Uuid
+  createdAt      DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt      DateTime @default(now()) @updatedAt @map("updated_at") @db.Timestamptz(6)
 
   student  Student  @relation(fields: [studentId], references: [id], onDelete: Cascade)
   merchant Merchant @relation(fields: [merchantId], references: [id], onDelete: Cascade)
@@ -1343,25 +1453,25 @@ model TipsRegistration {
 }
 
 model QrCode {
-  id             String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  merchantId     String    @map("merchant_id") @db.Uuid
-  studentId      String?   @map("student_id") @db.Uuid
-  storeId        String?   @map("store_id") @db.Uuid
-  terminalId     String?   @map("terminal_id") @db.Uuid
-  qrType         QrType    @map("qr_type")
-  status         QrStatus  @default(ACTIVE)
-  poiMethod      String    @map("poi_method") @db.Char(2)
-  currentVersion Int       @default(1) @map("current_version")
+  id              String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  merchantId      String    @map("merchant_id") @db.Uuid
+  studentId       String?   @map("student_id") @db.Uuid
+  storeId         String?   @map("store_id") @db.Uuid
+  terminalId      String?   @map("terminal_id") @db.Uuid
+  qrType          QrType    @map("qr_type")
+  status          QrStatus  @default(ACTIVE)
+  poiMethod       String    @map("poi_method") @db.Char(2)
+  currentVersion  Int       @default(1) @map("current_version")
   /// True when the latest regeneration changed the fixed amount (tag 54)
   /// baked into a static QR — any previously printed sticker now encodes a
   /// stale amount and needs reprinting. Cleared via the acknowledge-reprint
   /// action once ops confirms the new sticker is in place.
-  reprintRequired Boolean  @default(false) @map("reprint_required")
-  expiresAt      DateTime? @map("expires_at") @db.Timestamptz(6)
-  revokedAt      DateTime? @map("revoked_at") @db.Timestamptz(6)
-  createdAt      DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
-  updatedAt      DateTime  @default(now()) @updatedAt @map("updated_at") @db.Timestamptz(6)
-  createdBy      String?   @map("created_by") @db.Uuid
+  reprintRequired Boolean   @default(false) @map("reprint_required")
+  expiresAt       DateTime? @map("expires_at") @db.Timestamptz(6)
+  revokedAt       DateTime? @map("revoked_at") @db.Timestamptz(6)
+  createdAt       DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt       DateTime  @default(now()) @updatedAt @map("updated_at") @db.Timestamptz(6)
+  createdBy       String?   @map("created_by") @db.Uuid
 
   merchant        Merchant           @relation(fields: [merchantId], references: [id], onDelete: Cascade)
   student         Student?           @relation(fields: [studentId], references: [id])
@@ -1375,22 +1485,22 @@ model QrCode {
 }
 
 model QrPayloadVersion {
-  id              String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  qrId            String   @map("qr_id") @db.Uuid
-  version         Int
-  tlvPayload      String   @map("tlv_payload") @db.Text
-  crcValue        String   @map("crc_value") @db.Char(4)
-  tag26MerchantId String?  @map("tag_26_02_merchant_id") @db.VarChar(15)
-  tag62StoreLabel String?  @map("tag_62_03_store_label") @db.VarChar(25)
-  tag62InternalId String?  @map("tag_62_05_internal_id") @db.VarChar(25)
-  tag62TerminalLabel String? @map("tag_62_07_terminal_label") @db.VarChar(25)
-  amount          Decimal? @db.Decimal(18, 2)
-  billNumber      String?  @map("bill_number") @db.VarChar(25)
-  referenceLabel  String?  @map("reference_label") @db.VarChar(25)
-  createdAt       DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  id                 String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  qrId               String   @map("qr_id") @db.Uuid
+  version            Int
+  tlvPayload         String   @map("tlv_payload") @db.Text
+  crcValue           String   @map("crc_value") @db.Char(4)
+  tag26MerchantId    String?  @map("tag_26_02_merchant_id") @db.VarChar(15)
+  tag62StoreLabel    String?  @map("tag_62_03_store_label") @db.VarChar(25)
+  tag62InternalId    String?  @map("tag_62_05_internal_id") @db.VarChar(25)
+  tag62TerminalLabel String?  @map("tag_62_07_terminal_label") @db.VarChar(25)
+  amount             Decimal? @db.Decimal(18, 2)
+  billNumber         String?  @map("bill_number") @db.VarChar(25)
+  referenceLabel     String?  @map("reference_label") @db.VarChar(25)
+  createdAt          DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
 
-  qrCode        QrCode          @relation(fields: [qrId], references: [id], onDelete: Cascade)
-  renderAssets  QrRenderAsset[]
+  qrCode       QrCode          @relation(fields: [qrId], references: [id], onDelete: Cascade)
+  renderAssets QrRenderAsset[]
 
   @@unique([qrId, version])
   // Ties a dynamic QR payload to a stable, per-merchant-unique identifier
@@ -1478,7 +1588,7 @@ model SettlementCycle {
   cbsPostingRef       String?               @map("cbs_posting_ref") @db.VarChar(100)
   sweptAt             DateTime?             @map("swept_at") @db.Timestamptz(6)
   postedAt            DateTime?             @map("posted_at") @db.Timestamptz(6)
-  failureReason        String?              @map("failure_reason") @db.Text
+  failureReason       String?               @map("failure_reason") @db.Text
   createdAt           DateTime              @default(now()) @map("created_at") @db.Timestamptz(6)
   updatedAt           DateTime              @default(now()) @updatedAt @map("updated_at") @db.Timestamptz(6)
 
@@ -1496,18 +1606,18 @@ model SettlementCycle {
 /// nothing (per the design prototype's "only exceptions queued for a
 /// human" framing).
 model ReconciliationException {
-  id              String                         @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  merchantId      String                         @map("merchant_id") @db.Uuid
-  cycleDate       DateTime                       @map("cycle_date") @db.Date
+  id              String                        @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  merchantId      String                        @map("merchant_id") @db.Uuid
+  cycleDate       DateTime                      @map("cycle_date") @db.Date
   type            ReconciliationExceptionType
-  tipsEndToEndId  String?                        @map("tips_end_to_end_id") @db.VarChar(100)
-  amount          Decimal?                       @db.Decimal(18, 2)
-  status          ReconciliationExceptionStatus  @default(OPEN)
-  resolutionNotes String?                        @map("resolution_notes") @db.Text
-  resolvedBy      String?                        @map("resolved_by") @db.Uuid
-  resolvedAt      DateTime?                      @map("resolved_at") @db.Timestamptz(6)
-  createdAt       DateTime                       @default(now()) @map("created_at") @db.Timestamptz(6)
-  updatedAt       DateTime                       @default(now()) @updatedAt @map("updated_at") @db.Timestamptz(6)
+  tipsEndToEndId  String?                       @map("tips_end_to_end_id") @db.VarChar(100)
+  amount          Decimal?                      @db.Decimal(18, 2)
+  status          ReconciliationExceptionStatus @default(OPEN)
+  resolutionNotes String?                       @map("resolution_notes") @db.Text
+  resolvedBy      String?                       @map("resolved_by") @db.Uuid
+  resolvedAt      DateTime?                     @map("resolved_at") @db.Timestamptz(6)
+  createdAt       DateTime                      @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt       DateTime                      @default(now()) @updatedAt @map("updated_at") @db.Timestamptz(6)
 
   merchant Merchant @relation(fields: [merchantId], references: [id])
 

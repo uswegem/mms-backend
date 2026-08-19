@@ -18,6 +18,7 @@ describe('SettlementsService — sweep + CBS posting', () => {
       mdrOverride?: number;
       settlementAccount?: { id: string; accountNumber: string } | null;
       cbsShouldFail?: boolean;
+      scheduleMdr?: { rate: number; capAmount?: number } | null;
     } = {},
   ) {
     const merchantIds = opts.merchantIds ?? ['merchant-1'];
@@ -68,14 +69,39 @@ describe('SettlementsService — sweep + CBS posting', () => {
     };
     const config = { get: jest.fn().mockReturnValue(0.0085) };
     const audit = { record: jest.fn().mockResolvedValue(undefined) };
+    const resolvedSchedule = {
+      id: 'schedule-1',
+      charges:
+        opts.scheduleMdr === undefined
+          ? [{ chargeType: 'MDR', rate: 0.0085, capAmount: null }]
+          : opts.scheduleMdr === null
+            ? []
+            : [
+                {
+                  chargeType: 'MDR',
+                  rate: opts.scheduleMdr.rate,
+                  capAmount: opts.scheduleMdr.capAmount ?? null,
+                },
+              ],
+    };
+    const feeSchedules = {
+      resolveForMerchant: jest.fn().mockResolvedValue(resolvedSchedule),
+      mdrCharge: jest
+        .fn()
+        .mockImplementation(
+          (schedule: { charges: Array<{ chargeType: string }> }) =>
+            schedule.charges.find((c) => c.chargeType === 'MDR') ?? null,
+        ),
+    };
 
     const service = new SettlementsService(
       settlements as never,
       cbs,
       config as never,
       audit as never,
+      feeSchedules as never,
     );
-    return { service, settlements, cbs };
+    return { service, settlements, cbs, feeSchedules };
   }
 
   it('sums gross across unswept payments and applies the default MDR when no merchant override exists', async () => {
@@ -91,14 +117,43 @@ describe('SettlementsService — sweep + CBS posting', () => {
     expect(call.status).toBe(SettlementCycleStatus.SWEPT);
   });
 
-  it('uses the merchant-specific MDR override instead of the platform default', async () => {
-    const { service, settlements } = buildService({ mdrOverride: 0.01 });
+  it('uses the merchant-specific settlementConfig.mdr override instead of the resolved fee schedule', async () => {
+    const { service, settlements, feeSchedules } = buildService({
+      mdrOverride: 0.01,
+    });
     await service.sweepAndPost(cycleDate);
 
     const [call] = settlements.createCycleWithPayments.mock.calls[0] as [
       CreatedCycleCall,
     ];
     expect(call.mdrAmount.toString()).toBe('345'); // 34500 * 0.01
+    expect(feeSchedules.resolveForMerchant).not.toHaveBeenCalled();
+  });
+
+  it("caps the resolved fee schedule's MDR at its capAmount", async () => {
+    // 34500 * 5% = 1725, but the schedule caps MDR at 500.
+    const { service, settlements } = buildService({
+      scheduleMdr: { rate: 0.05, capAmount: 500 },
+    });
+    await service.sweepAndPost(cycleDate);
+
+    const [call] = settlements.createCycleWithPayments.mock.calls[0] as [
+      CreatedCycleCall,
+    ];
+    expect(call.mdrAmount.toString()).toBe('500');
+  });
+
+  it('falls back to the platform default MDR when fee schedule resolution throws', async () => {
+    const { service, settlements, feeSchedules } = buildService();
+    feeSchedules.resolveForMerchant.mockRejectedValue(
+      new Error('No DEFAULT fee schedule is active'),
+    );
+    await service.sweepAndPost(cycleDate);
+
+    const [call] = settlements.createCycleWithPayments.mock.calls[0] as [
+      CreatedCycleCall,
+    ];
+    expect(call.mdrAmount.toString()).toBe('293.25'); // 34500 * 0.0085 config default
   });
 
   it('links every unswept payment to the new cycle', async () => {

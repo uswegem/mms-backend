@@ -130,3 +130,18 @@ export class GetOnboardingTimelineQuery {
     public readonly applicationId: string,
   ) {}
 }
+
+/** Handoff §ob7 — resolves the fee schedule this application's merchant would be billed under, plus whether it's already been accepted. */
+export class GetApplicationFeeScheduleQuery {
+  constructor(
+    public readonly actor: ActorContext,
+    public readonly applicationId: string,
+  ) {}
+}
+
+export class AcceptFeeScheduleCommand {
+  constructor(
+    public readonly actor: ActorContext,
+    public readonly applicationId: string,
+  ) {}
+}
