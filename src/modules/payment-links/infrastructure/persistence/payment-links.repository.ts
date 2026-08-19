@@ -9,7 +9,13 @@ const linkInclude = {
 
 const publicLinkInclude = {
   payment: true,
-  merchant: { select: { tradingName: true, displayName: true } },
+  merchant: {
+    select: {
+      tradingName: true,
+      displayName: true,
+      merchantAlias: { select: { alias8digit: true } },
+    },
+  },
 } satisfies Prisma.PaymentLinkInclude;
 
 export type PaymentLinkWithRelations = Prisma.PaymentLinkGetPayload<{
