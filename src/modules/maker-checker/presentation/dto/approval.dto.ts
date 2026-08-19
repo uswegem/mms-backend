@@ -1,7 +1,16 @@
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 import { ApprovalEntityType, ApprovalTaskStatus } from '@prisma/client';
 import { PaginationQueryDto } from '@shared/presentation/dto/pagination.dto';
-import { IsEnum, IsOptional, IsString, Length } from 'class-validator';
+import {
+  IsBoolean,
+  IsEnum,
+  IsInt,
+  IsOptional,
+  IsString,
+  Length,
+  Max,
+  Min,
+} from 'class-validator';
 
 export class ListApprovalTasksQueryDto extends PaginationQueryDto {
   @ApiPropertyOptional({ enum: ApprovalTaskStatus })
@@ -63,4 +72,37 @@ export class PaginatedApprovalTasksDto {
 
   @ApiProperty()
   meta!: { page: number; limit: number; total: number };
+}
+
+export class UpdateApprovalPolicyDto {
+  @ApiProperty({
+    description: 'Whether this activity requires a second (checker) approval',
+  })
+  @IsBoolean()
+  enabled!: boolean;
+
+  @ApiProperty({
+    description: 'SLA, in hours, before a pending task is considered breached',
+  })
+  @IsInt()
+  @Min(1)
+  @Max(720)
+  slaHours!: number;
+}
+
+export class ApprovalPolicyResponseDto {
+  @ApiProperty({ enum: ApprovalEntityType })
+  entityType!: ApprovalEntityType;
+
+  @ApiProperty()
+  enabled!: boolean;
+
+  @ApiProperty()
+  slaHours!: number;
+
+  @ApiPropertyOptional({
+    description:
+      'null if this activity is still on the unconfigured default (enabled, 24h SLA)',
+  })
+  updatedAt!: string | null;
 }

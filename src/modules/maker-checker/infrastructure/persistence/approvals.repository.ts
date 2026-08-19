@@ -1,9 +1,5 @@
 import { Injectable } from '@nestjs/common';
-import {
-  ApprovalEntityType,
-  ApprovalTaskStatus,
-  Prisma,
-} from '@prisma/client';
+import { ApprovalEntityType, ApprovalTaskStatus, Prisma } from '@prisma/client';
 import { PrismaService } from '@infrastructure/database/prisma/prisma.service';
 
 const taskInclude = {
@@ -23,6 +19,12 @@ export class ApprovalsRepository {
       where: {
         acquirerId_entityType: { acquirerId, entityType },
       },
+    });
+  }
+
+  async listPolicies(acquirerId: string, entityTypes: ApprovalEntityType[]) {
+    return this.prisma.approvalPolicy.findMany({
+      where: { acquirerId, entityType: { in: entityTypes } },
     });
   }
 

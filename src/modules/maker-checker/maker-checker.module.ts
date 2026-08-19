@@ -5,6 +5,7 @@ import { AuditModule } from '@infrastructure/audit/audit.module';
 import { MerchantOnboardingModule } from '@modules/merchant-onboarding/merchant-onboarding.module';
 import { MerchantStatusModule } from '@modules/merchant-status/merchant-status.module';
 import { ApprovalsController } from './presentation/http/approvals.controller';
+import { ApprovalPolicyController } from './presentation/http/approval-policy.controller';
 import { ApprovalsRepository } from './infrastructure/persistence/approvals.repository';
 import { MakerCheckerService } from './application/services/maker-checker.service';
 import { ListApprovalTasksHandler } from './application/handlers/list-approval-tasks.handler';
@@ -27,7 +28,7 @@ const handlers = [
     forwardRef(() => MerchantOnboardingModule),
     forwardRef(() => MerchantStatusModule),
   ],
-  controllers: [ApprovalsController],
+  controllers: [ApprovalsController, ApprovalPolicyController],
   providers: [ApprovalsRepository, MakerCheckerService, ...handlers],
   exports: [MakerCheckerService, ApprovalsRepository],
 })
