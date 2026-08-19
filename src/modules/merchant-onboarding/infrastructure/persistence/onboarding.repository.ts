@@ -29,7 +29,43 @@ const appInclude = {
     },
   },
   steps: true,
-  beneficialOwners: { where: { deletedAt: null } },
+  // rawResponse deliberately not selected on verification results — no
+  // reason to put raw provider payloads on the wire to the browser.
+  // idNumberEnc IS selected (ciphertext, never plaintext) because
+  // IdentityVerificationService.verifyBeneficialOwnerNida decrypts it via
+  // this same findById() query — it's just not part of the frontend's
+  // OnboardingApplication type, so it stays inert on the client.
+  beneficialOwners: {
+    where: { deletedAt: null },
+    select: {
+      id: true,
+      fullName: true,
+      idNumberEnc: true,
+      ownershipPct: true,
+      createdAt: true,
+      nidaVerifications: {
+        orderBy: { verifiedAt: 'desc' as const },
+        select: {
+          id: true,
+          result: true,
+          verifiedName: true,
+          failureReason: true,
+          verifiedAt: true,
+        },
+      },
+    },
+  },
+  traVerifications: {
+    orderBy: { verifiedAt: 'desc' as const },
+    select: {
+      id: true,
+      tin: true,
+      result: true,
+      verifiedName: true,
+      failureReason: true,
+      verifiedAt: true,
+    },
+  },
   amlResults: { orderBy: { screenedAt: 'desc' as const }, take: 1 },
   kycReviews: { orderBy: { reviewedAt: 'desc' as const } },
   riskReviews: { orderBy: { createdAt: 'desc' as const } },

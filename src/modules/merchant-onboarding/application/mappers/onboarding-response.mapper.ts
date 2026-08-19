@@ -120,6 +120,21 @@ export function toOnboardingResponse(app: OnboardingAppWithRelations) {
       id: o.id,
       fullName: o.fullName,
       ownershipPct: o.ownershipPct?.toString() ?? null,
+      nidaVerifications: o.nidaVerifications.map((v) => ({
+        id: v.id,
+        result: v.result,
+        verifiedName: v.verifiedName,
+        failureReason: v.failureReason,
+        verifiedAt: v.verifiedAt.toISOString(),
+      })),
+    })),
+    traVerifications: app.traVerifications.map((v) => ({
+      id: v.id,
+      tin: v.tin,
+      result: v.result,
+      verifiedName: v.verifiedName,
+      failureReason: v.failureReason,
+      verifiedAt: v.verifiedAt.toISOString(),
     })),
     amlResult: app.amlResults[0]
       ? {
