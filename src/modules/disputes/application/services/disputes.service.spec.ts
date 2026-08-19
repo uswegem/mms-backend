@@ -41,6 +41,9 @@ function buildService() {
       findUnique: jest.fn(),
       update: jest.fn().mockResolvedValue({}),
     },
+    auditLog: {
+      findMany: jest.fn().mockResolvedValue([]),
+    },
   };
   const makerChecker = { createTask: jest.fn() };
   const audit = { record: jest.fn().mockResolvedValue(undefined) };
@@ -234,6 +237,23 @@ describe('DisputesService', () => {
           metadata: { notes: 'insufficient evidence' },
         }),
       );
+    });
+  });
+
+  describe('getAuditLogs', () => {
+    it('reads real audit_logs rows scoped to this dispute', async () => {
+      const { service, prisma } = buildService();
+      prisma.auditLog.findMany.mockResolvedValue([
+        { id: 'log-1', action: 'DISPUTE_LOGGED', createdAt: new Date() },
+      ]);
+
+      const result = await service.getAuditLogs('dispute-1');
+
+      expect(prisma.auditLog.findMany).toHaveBeenCalledWith({
+        where: { entityType: 'dispute', entityId: 'dispute-1' },
+        orderBy: { createdAt: 'asc' },
+      });
+      expect(result).toHaveLength(1);
     });
   });
 

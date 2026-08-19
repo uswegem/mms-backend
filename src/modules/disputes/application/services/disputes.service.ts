@@ -112,6 +112,14 @@ export class DisputesService implements DisputeRefundApprovalPort {
     return dispute;
   }
 
+  /** Real per-action history for the case timeline — every audit.record() call above. */
+  async getAuditLogs(id: string) {
+    return this.prisma.auditLog.findMany({
+      where: { entityType: 'dispute', entityId: id },
+      orderBy: { createdAt: 'asc' },
+    });
+  }
+
   async list(
     acquirerId: string,
     merchantId?: string,

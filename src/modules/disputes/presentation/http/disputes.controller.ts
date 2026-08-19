@@ -75,6 +75,18 @@ export class DisputesController {
     return dispute;
   }
 
+  @Get(':id/audit-logs')
+  @RequirePermissions(Permission.DISPUTE_READ)
+  @ApiOperation({ summary: 'Real per-action history for the case timeline' })
+  async auditLogs(
+    @Param('id', ParseUUIDPipe) id: string,
+    @CurrentUser() user: JwtPayload,
+  ) {
+    const dispute = await this.disputes.getById(id);
+    this.scope.assertCanAccessMerchant(toActor(user), dispute.merchantId);
+    return this.disputes.getAuditLogs(id);
+  }
+
   @Post()
   @RequirePermissions(Permission.DISPUTE_WRITE)
   @ApiOperation({ summary: 'Log a dispute against a real payment' })
