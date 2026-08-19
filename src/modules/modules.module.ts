@@ -23,6 +23,8 @@ import { ReferenceDataModule } from './reference-data/reference-data.module';
 import { TransactionLimitsModule } from './transaction-limits/transaction-limits.module';
 import { FeeSchedulesModule } from './fee-schedules/fee-schedules.module';
 import { DisputesModule } from './disputes/disputes.module';
+import { PaymentLinksModule } from './payment-links/payment-links.module';
+import { KycUpgradeModule } from './kyc-upgrade/kyc-upgrade.module';
 
 /**
  * Registers all bounded-context modules (structure only — no business logic).
@@ -53,6 +55,8 @@ import { DisputesModule } from './disputes/disputes.module';
     TransactionLimitsModule,
     FeeSchedulesModule,
     DisputesModule,
+    PaymentLinksModule,
+    KycUpgradeModule,
   ],
 })
 export class ModulesModule {}

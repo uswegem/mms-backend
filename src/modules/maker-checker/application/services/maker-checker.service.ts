@@ -25,6 +25,7 @@ const CONFIGURABLE_ENTITY_TYPES: ApprovalEntityType[] = [
   ApprovalEntityType.SCHOOL_ONBOARDING,
   ApprovalEntityType.MERCHANT_STATUS_CHANGE,
   ApprovalEntityType.DISPUTE_REFUND,
+  ApprovalEntityType.KYC_TIER_UPGRADE,
 ];
 
 @Injectable()

@@ -12,6 +12,8 @@ import { MERCHANT_STATUS_APPROVAL_PORT } from '../ports/merchant-status-approval
 import type { MerchantStatusApprovalPort } from '../ports/merchant-status-approval.port';
 import { DISPUTE_REFUND_APPROVAL_PORT } from '../ports/dispute-refund-approval.port';
 import type { DisputeRefundApprovalPort } from '../ports/dispute-refund-approval.port';
+import { KYC_UPGRADE_APPROVAL_PORT } from '../ports/kyc-upgrade-approval.port';
+import type { KycUpgradeApprovalPort } from '../ports/kyc-upgrade-approval.port';
 
 @CommandHandler(RejectTaskCommand)
 export class RejectTaskHandler implements ICommandHandler<RejectTaskCommand> {
@@ -27,6 +29,9 @@ export class RejectTaskHandler implements ICommandHandler<RejectTaskCommand> {
     @Optional()
     @Inject(DISPUTE_REFUND_APPROVAL_PORT)
     private readonly disputeRefundApproval?: DisputeRefundApprovalPort,
+    @Optional()
+    @Inject(KYC_UPGRADE_APPROVAL_PORT)
+    private readonly kycUpgradeApproval?: KycUpgradeApprovalPort,
   ) {}
 
   async execute(command: RejectTaskCommand) {
@@ -82,6 +87,17 @@ export class RejectTaskHandler implements ICommandHandler<RejectTaskCommand> {
       task.entityType === ApprovalEntityType.DISPUTE_REFUND
     ) {
       await this.disputeRefundApproval.onCheckerRejected(
+        task.entityId,
+        command.actor.sub,
+        command.notes,
+      );
+    }
+
+    if (
+      this.kycUpgradeApproval &&
+      task.entityType === ApprovalEntityType.KYC_TIER_UPGRADE
+    ) {
+      await this.kycUpgradeApproval.onCheckerRejected(
         task.entityId,
         command.actor.sub,
         command.notes,

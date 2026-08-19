@@ -198,6 +198,7 @@ enum ApprovalEntityType {
   CONFIG_CHANGE
   MERCHANT_STATUS_CHANGE
   DISPUTE_REFUND
+  KYC_TIER_UPGRADE
 
   @@map("approval_entity_type")
 }
@@ -312,15 +313,17 @@ model Acquirer {
   deletedAt           DateTime? @map("deleted_at") @db.Timestamptz(6)
   deletedBy           String?   @map("deleted_by") @db.Uuid
 
-  users            User[]
-  merchants        Merchant[]
-  payments         Payment[]
-  roles            Role[]
-  onboardingApps   OnboardingApplication[]
-  approvalPolicies ApprovalPolicy[]
-  approvalTasks    ApprovalTask[]
-  policyOverrides  PolicyOverride[]
-  disputes         Dispute[]
+  users              User[]
+  merchants          Merchant[]
+  payments           Payment[]
+  roles              Role[]
+  onboardingApps     OnboardingApplication[]
+  approvalPolicies   ApprovalPolicy[]
+  approvalTasks      ApprovalTask[]
+  policyOverrides    PolicyOverride[]
+  disputes           Dispute[]
+  paymentLinks       PaymentLink[]
+  kycUpgradeRequests KycUpgradeRequest[]
 
   @@map("acquirers")
 }
@@ -594,6 +597,8 @@ model Merchant {
   reconciliationExceptions ReconciliationException[]
   studentRosterUploads     StudentRosterUpload[]
   disputes                 Dispute[]
+  paymentLinks             PaymentLink[]
+  kycUpgradeRequests       KycUpgradeRequest[]
 
   @@index([acquirerId, status], map: "idx_merchants_acquirer_status")
   @@index([tradingName], map: "idx_merchants_trading_name")
@@ -1569,6 +1574,7 @@ model Payment {
   merchant        Merchant         @relation(fields: [merchantId], references: [id])
   settlementCycle SettlementCycle? @relation(fields: [settlementCycleId], references: [id])
   disputes        Dispute[]
+  paymentLink     PaymentLink?
 
   @@index([merchantId, status])
   @@index([merchantId, receivedAt])
@@ -1710,6 +1716,112 @@ model DisputeEvidence {
 
   @@index([disputeId])
   @@map("dispute_evidence")
+}
+
+enum PaymentLinkStatus {
+  ACTIVE
+  PAID
+  CANCELLED
+
+  @@map("payment_link_status")
+}
+
+/// Handoff §links (§4.5 Online). A merchant without their own website
+/// shares a slug-based pay link — and/or its auto-generated storefront
+/// grid of active links — for a single item. A buyer pays through the
+/// same real TIPS webhook path as any other Lipa Namba payment; there is
+/// no separate payment rail here. PaymentLinksService matches the
+/// resulting Payment back to this link by merchant + exact amount +
+/// recency once it lands (see confirmPayment's doc comment) — "EXPIRED"
+/// is not stored, it's derived from expiresAt at read time, same as
+/// Dispute's SLA-breach display.
+model PaymentLink {
+  id          String            @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  acquirerId  String            @map("acquirer_id") @db.Uuid
+  merchantId  String            @map("merchant_id") @db.Uuid
+  itemName    String            @map("item_name") @db.VarChar(255)
+  orderRef    String            @map("order_ref") @db.VarChar(100)
+  description String?           @db.Text
+  amount      Decimal           @db.Decimal(14, 2)
+  currency    String            @default("TZS") @db.Char(3)
+  slug        String            @unique @db.VarChar(20)
+  status      PaymentLinkStatus @default(ACTIVE)
+  expiresAt   DateTime          @map("expires_at") @db.Timestamptz(6)
+  paymentId   String?           @unique @map("payment_id") @db.Uuid
+  paidAt      DateTime?         @map("paid_at") @db.Timestamptz(6)
+  createdAt   DateTime          @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt   DateTime          @default(now()) @updatedAt @map("updated_at") @db.Timestamptz(6)
+  createdBy   String            @map("created_by") @db.Uuid
+
+  acquirer Acquirer @relation(fields: [acquirerId], references: [id])
+  merchant Merchant @relation(fields: [merchantId], references: [id])
+  payment  Payment? @relation(fields: [paymentId], references: [id])
+
+  @@index([merchantId, status])
+  @@map("payment_links")
+}
+
+enum KycUpgradeStatus {
+  IN_PROGRESS
+  PENDING_CHECKER_APPROVAL
+  APPROVED
+  REJECTED
+
+  @@map("kyc_upgrade_status")
+}
+
+/// Handoff §kycup (§5.2 Online). TIER_1 ("lighter" online-seller KYC —
+/// NIDA + phone OTP only, no TIN/business registration) has no onboarding
+/// path built in this codebase yet — see KycTier's own doc comment; that
+/// gap is explicitly out of scope here without formal BOT sign-off, same
+/// as every other "beyond BRS baseline" gap flagged elsewhere. What IS
+/// real: once a TIER_1 merchant's rolling 30-day payment volume crosses
+/// its tier's TransactionLimitPolicy.monthlyLimit, they can request an
+/// upgrade — TIN/TRA re-verification (the same TraVerificationProvider
+/// port onboarding Step 3 uses) plus business-registration documents,
+/// then a fresh maker-checker review (entityType KYC_TIER_UPGRADE) that
+/// bumps Merchant.kycTier for real on approval.
+model KycUpgradeRequest {
+  id                    String              @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  acquirerId            String              @map("acquirer_id") @db.Uuid
+  merchantId            String              @map("merchant_id") @db.Uuid
+  fromTier              KycTier             @map("from_tier")
+  toTier                KycTier             @map("to_tier")
+  status                KycUpgradeStatus    @default(IN_PROGRESS)
+  tin                   String?             @db.VarChar(50)
+  tinVerificationResult VerificationResult? @map("tin_verification_result")
+  tinVerifiedName       String?             @map("tin_verified_name") @db.VarChar(255)
+  tinVerifiedAt         DateTime?           @map("tin_verified_at") @db.Timestamptz(6)
+  rejectionNotes        String?             @map("rejection_notes") @db.Text
+  decidedAt             DateTime?           @map("decided_at") @db.Timestamptz(6)
+  createdAt             DateTime            @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt             DateTime            @default(now()) @updatedAt @map("updated_at") @db.Timestamptz(6)
+  createdBy             String              @map("created_by") @db.Uuid
+
+  acquirer  Acquirer             @relation(fields: [acquirerId], references: [id])
+  merchant  Merchant             @relation(fields: [merchantId], references: [id])
+  documents KycUpgradeDocument[]
+
+  @@index([merchantId, status])
+  @@map("kyc_upgrade_requests")
+}
+
+model KycUpgradeDocument {
+  id         String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  requestId  String   @map("request_id") @db.Uuid
+  docType    String   @map("doc_type") @db.VarChar(50)
+  fileName   String   @map("file_name") @db.VarChar(255)
+  s3Bucket   String   @map("s3_bucket") @db.VarChar(100)
+  s3Key      String   @map("s3_key") @db.Text
+  mimeType   String?  @map("mime_type") @db.VarChar(100)
+  fileSize   Int?     @map("file_size")
+  uploadedAt DateTime @default(now()) @map("uploaded_at") @db.Timestamptz(6)
+  uploadedBy String   @map("uploaded_by") @db.Uuid
+
+  request KycUpgradeRequest @relation(fields: [requestId], references: [id], onDelete: Cascade)
+
+  @@index([requestId])
+  @@map("kyc_upgrade_documents")
 }
 
 enum PolicyEffect {

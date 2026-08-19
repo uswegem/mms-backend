@@ -58,6 +58,12 @@ describe('MakerCheckerService — policy configuration (cfgmc)', () => {
           slaHours: 24,
           updatedAt: null,
         },
+        {
+          entityType: ApprovalEntityType.KYC_TIER_UPGRADE,
+          enabled: true,
+          slaHours: 24,
+          updatedAt: null,
+        },
       ]);
     });
 
@@ -72,6 +78,7 @@ describe('MakerCheckerService — policy configuration (cfgmc)', () => {
         ApprovalEntityType.SCHOOL_ONBOARDING,
         ApprovalEntityType.MERCHANT_STATUS_CHANGE,
         ApprovalEntityType.DISPUTE_REFUND,
+        ApprovalEntityType.KYC_TIER_UPGRADE,
       ]);
     });
   });

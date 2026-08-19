@@ -420,6 +420,16 @@ const PERMISSIONS = [
     description: 'Raise a dispute, attach evidence, initiate or resolve a refund',
   },
   {
+    code: 'payment-link:read',
+    module: 'payment-links',
+    description: 'View payment links and the storefront',
+  },
+  {
+    code: 'payment-link:write',
+    module: 'payment-links',
+    description: 'Create, cancel, or reissue a payment link',
+  },
+  {
     // Pre-existing gap: TransactionLimitPolicyController has required this
     // since brief §4.3.3 landed, but it was never added here — meaning no
     // role, not even SUPER_ADMIN, could actually reach those routes.
@@ -514,6 +524,8 @@ const ROLES: Array<{
       'fee-schedule:approve',
       'dispute:read',
       'dispute:write',
+      'payment-link:read',
+      'payment-link:write',
       'audit:read',
     ],
   },
@@ -539,6 +551,8 @@ const ROLES: Array<{
       'reconciliation:resolve',
       'dispute:read',
       'dispute:write',
+      'payment-link:read',
+      'payment-link:write',
     ],
   },
   {
@@ -564,6 +578,8 @@ const ROLES: Array<{
       'alias:read',
       'dispute:read',
       'dispute:write',
+      'payment-link:read',
+      'payment-link:write',
     ],
   },
   {
@@ -580,6 +596,8 @@ const ROLES: Array<{
       'alias:read',
       'dispute:read',
       'dispute:write',
+      'payment-link:read',
+      'payment-link:write',
     ],
   },
   {
@@ -611,6 +629,8 @@ const ROLES: Array<{
       'settlements:read',
       'dispute:read',
       'dispute:write',
+      'payment-link:read',
+      'payment-link:write',
     ],
   },
 ];

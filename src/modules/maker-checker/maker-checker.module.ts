@@ -5,6 +5,7 @@ import { AuditModule } from '@infrastructure/audit/audit.module';
 import { MerchantOnboardingModule } from '@modules/merchant-onboarding/merchant-onboarding.module';
 import { MerchantStatusModule } from '@modules/merchant-status/merchant-status.module';
 import { DisputesModule } from '@modules/disputes/disputes.module';
+import { KycUpgradeModule } from '@modules/kyc-upgrade/kyc-upgrade.module';
 import { ApprovalsController } from './presentation/http/approvals.controller';
 import { ApprovalPolicyController } from './presentation/http/approval-policy.controller';
 import { ApprovalsRepository } from './infrastructure/persistence/approvals.repository';
@@ -29,6 +30,7 @@ const handlers = [
     forwardRef(() => MerchantOnboardingModule),
     forwardRef(() => MerchantStatusModule),
     forwardRef(() => DisputesModule),
+    forwardRef(() => KycUpgradeModule),
   ],
   controllers: [ApprovalsController, ApprovalPolicyController],
   providers: [ApprovalsRepository, MakerCheckerService, ...handlers],

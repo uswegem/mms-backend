@@ -4,9 +4,7 @@ import { MakerCheckerService } from '../services/maker-checker.service';
 import { toApprovalTaskResponse } from '../mappers/approval-response.mapper';
 
 @QueryHandler(ListApprovalTasksQuery)
-export class ListApprovalTasksHandler
-  implements IQueryHandler<ListApprovalTasksQuery>
-{
+export class ListApprovalTasksHandler implements IQueryHandler<ListApprovalTasksQuery> {
   constructor(private readonly makerChecker: MakerCheckerService) {}
 
   async execute(query: ListApprovalTasksQuery) {

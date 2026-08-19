@@ -4,15 +4,22 @@ import { ErrorCodes } from '@shared/infrastructure/exceptions/error-codes';
 
 export class ApprovalTaskNotFoundException extends AppException {
   constructor(id: string) {
-    super(ErrorCodes.NOT_FOUND, HttpStatus.NOT_FOUND, `Approval task not found: ${id}`, {
-      title: 'Not Found',
-    });
+    super(
+      ErrorCodes.NOT_FOUND,
+      HttpStatus.NOT_FOUND,
+      `Approval task not found: ${id}`,
+      {
+        title: 'Not Found',
+      },
+    );
   }
 }
 
 export class ApprovalForbiddenException extends AppException {
   constructor(detail = 'Approval action not permitted') {
-    super(ErrorCodes.FORBIDDEN, HttpStatus.FORBIDDEN, detail, { title: 'Forbidden' });
+    super(ErrorCodes.FORBIDDEN, HttpStatus.FORBIDDEN, detail, {
+      title: 'Forbidden',
+    });
   }
 }
 

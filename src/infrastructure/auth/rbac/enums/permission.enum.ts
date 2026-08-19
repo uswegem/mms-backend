@@ -67,6 +67,9 @@ export enum Permission {
   // Disputes
   DISPUTE_READ = 'dispute:read',
   DISPUTE_WRITE = 'dispute:write',
+  // Payment links
+  PAYMENT_LINK_READ = 'payment-link:read',
+  PAYMENT_LINK_WRITE = 'payment-link:write',
   // Fee schedule / MDR configuration
   FEE_SCHEDULE_READ = 'fee-schedule:read',
   FEE_SCHEDULE_WRITE = 'fee-schedule:write',
