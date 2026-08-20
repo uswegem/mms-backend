@@ -574,6 +574,7 @@ const ROLES: Array<{
       'onboarding:submit',
       'transactions:read',
       'settlements:read',
+      'reconciliation:read',
       'qr:read',
       'qr:generate',
       'alias:read',
@@ -581,6 +582,13 @@ const ROLES: Array<{
       'dispute:write',
       'payment-link:read',
       'payment-link:write',
+      // A merchant can itself be a school (isSchool on the Merchant record)
+      // — MERCHANT_ADMIN is not restricted to non-school merchants, so it
+      // needs the same roster permissions SCHOOL_ADMIN has below.
+      'school:read',
+      'school:student:read',
+      'school:student:write',
+      'school:student:bulk',
     ],
   },
   {
@@ -593,12 +601,15 @@ const ROLES: Array<{
       'merchant:read',
       'merchant:kyc:read',
       'transactions:read',
+      'reconciliation:read',
       'qr:read',
       'alias:read',
       'dispute:read',
       'dispute:write',
       'payment-link:read',
       'payment-link:write',
+      'school:read',
+      'school:student:read',
     ],
   },
   {
@@ -629,6 +640,7 @@ const ROLES: Array<{
       'onboarding:submit',
       'transactions:read',
       'settlements:read',
+      'reconciliation:read',
       'dispute:read',
       'dispute:write',
       'payment-link:read',

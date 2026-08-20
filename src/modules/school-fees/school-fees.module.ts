@@ -1,6 +1,7 @@
 import { Module, forwardRef } from '@nestjs/common';
 import { CqrsModule } from '@nestjs/cqrs';
 import { AuthModule } from '@infrastructure/auth/auth.module';
+import { MerchantScopeService } from '@shared/application/services/merchant-scope.service';
 import { MerchantOnboardingModule } from '@modules/merchant-onboarding/merchant-onboarding.module';
 import { AliasModule } from '@modules/alias/alias.module';
 import { QrModule } from '@modules/qr/qr.module';
@@ -32,6 +33,7 @@ import { StudentAliasConsumer } from './application/handlers/student-alias.consu
     BulkStudentUploadService,
     SchoolIssuanceService,
     StudentAliasConsumer,
+    MerchantScopeService,
     {
       provide: SCHOOL_ONBOARDING_COMPLETION_PORT,
       useExisting: SchoolIssuanceService,

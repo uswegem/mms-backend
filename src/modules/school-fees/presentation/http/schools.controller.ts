@@ -14,6 +14,8 @@ import { LegalEntityType } from '@prisma/client';
 import { RequirePermissions } from '@infrastructure/auth/rbac/decorators/permissions.decorator';
 import { Permission } from '@infrastructure/auth/rbac/enums/permission.enum';
 import { CurrentUser } from '@shared/application/decorators/current-user.decorator';
+import { ActorContext } from '@shared/application/interfaces/actor-context.interface';
+import { MerchantScopeService } from '@shared/application/services/merchant-scope.service';
 import type { JwtPayload } from '@modules/identity/infrastructure/strategies/jwt.strategy';
 import { CommandBus } from '@nestjs/cqrs';
 import { CreateOnboardingApplicationCommand } from '@modules/merchant-onboarding/application/commands/create-onboarding-application.command';
@@ -24,6 +26,17 @@ import {
   UpdateSchoolProfileDto,
 } from '../dto/school.dto';
 
+function toActor(user: JwtPayload): ActorContext {
+  return {
+    sub: user.sub,
+    email: user.email,
+    acquirerId: user.acquirerId,
+    merchantId: user.merchantId,
+    roles: user.roles,
+    permissions: user.permissions,
+  };
+}
+
 @ApiTags('Schools')
 @ApiBearerAuth('access-token')
 @Controller('schools')
@@ -31,6 +44,7 @@ export class SchoolsController {
   constructor(
     private readonly schools: SchoolsRepository,
     private readonly commandBus: CommandBus,
+    private readonly scope: MerchantScopeService,
   ) {}
 
   @Post('onboarding')
@@ -41,14 +55,7 @@ export class SchoolsController {
     @CurrentUser() user: JwtPayload,
     @Body() dto: CreateSchoolOnboardingDto,
   ) {
-    const actor = {
-      sub: user.sub,
-      email: user.email,
-      acquirerId: user.acquirerId,
-      merchantId: user.merchantId,
-      roles: user.roles,
-      permissions: user.permissions,
-    };
+    const actor = toActor(user);
     const app = await this.commandBus.execute(
       new CreateOnboardingApplicationCommand(actor, {
         legalEntityType: LegalEntityType.COMPANY,
@@ -75,7 +82,11 @@ export class SchoolsController {
   @Get(':merchantId')
   @RequirePermissions(Permission.SCHOOL_READ)
   @ApiOperation({ summary: 'Get school profile by merchant ID' })
-  async getSchool(@Param('merchantId', ParseUUIDPipe) merchantId: string) {
+  async getSchool(
+    @Param('merchantId', ParseUUIDPipe) merchantId: string,
+    @CurrentUser() user: JwtPayload,
+  ) {
+    this.scope.assertCanAccessMerchant(toActor(user), merchantId);
     const school = await this.schools.findByMerchantId(merchantId);
     if (!school) return { merchantId, profile: null };
     return {
@@ -102,7 +113,9 @@ export class SchoolsController {
   async updateProfile(
     @Param('merchantId', ParseUUIDPipe) merchantId: string,
     @Body() dto: UpdateSchoolProfileDto,
+    @CurrentUser() user: JwtPayload,
   ) {
+    this.scope.assertCanAccessMerchant(toActor(user), merchantId);
     const school = await this.schools.updateProfile(merchantId, dto);
     return {
       merchantId: school.merchantId,
@@ -118,7 +131,9 @@ export class SchoolsController {
   async updateContacts(
     @Param('merchantId', ParseUUIDPipe) merchantId: string,
     @Body() dto: UpdateSchoolContactsDto,
+    @CurrentUser() user: JwtPayload,
   ) {
+    this.scope.assertCanAccessMerchant(toActor(user), merchantId);
     const school = await this.schools.updateContacts(merchantId, dto);
     return {
       merchantId: school.merchantId,

@@ -1,6 +1,10 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { RabbitSubscribe } from '@golevelup/nestjs-rabbitmq';
-import { QUEUE_NAMES, QUEUE_ROUTING, type StudentAliasGeneratePayload } from '@infrastructure/queue/queue.constants';
+import {
+  QUEUE_NAMES,
+  QUEUE_ROUTING,
+  type StudentAliasGeneratePayload,
+} from '@infrastructure/queue/queue.constants';
 import { StudentAliasService } from '../services/student-alias.service';
 
 @Injectable()
@@ -26,7 +30,9 @@ export class StudentAliasConsumer {
       channel.nack(msg, false, false);
     },
   })
-  async handleAliasGenerate(payload: StudentAliasGeneratePayload): Promise<void> {
+  async handleAliasGenerate(
+    payload: StudentAliasGeneratePayload,
+  ): Promise<void> {
     const { studentId, merchantId, actorId, batchId, row } = payload;
     this.logger.log(
       `[batch:${batchId}] row ${row} — issuing alias for student ${studentId}`,

@@ -1,6 +1,7 @@
 import { Module } from '@nestjs/common';
 import { DatabaseModule } from '@infrastructure/database/database.module';
 import { AuditModule } from '@infrastructure/audit/audit.module';
+import { MerchantScopeService } from '@shared/application/services/merchant-scope.service';
 import { ReconciliationRepository } from './infrastructure/persistence/reconciliation.repository';
 import { TipsSettlementReportProvider } from './application/ports/tips-settlement-report.port';
 import { MockTipsSettlementReportProvider } from './infrastructure/services/mock-tips-settlement-report.provider';
@@ -20,6 +21,7 @@ import { ReconciliationController } from './presentation/http/reconciliation.con
     },
     ReconciliationService,
     ReconciliationMatchJob,
+    MerchantScopeService,
   ],
 })
 export class ReconciliationModule {}

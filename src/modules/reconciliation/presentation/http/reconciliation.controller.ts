@@ -11,6 +11,8 @@ import { ApiBearerAuth, ApiOperation, ApiTags } from '@nestjs/swagger';
 import { RequirePermissions } from '@infrastructure/auth/rbac/decorators/permissions.decorator';
 import { Permission } from '@infrastructure/auth/rbac/enums/permission.enum';
 import { CurrentUser } from '@shared/application/decorators/current-user.decorator';
+import { ActorContext } from '@shared/application/interfaces/actor-context.interface';
+import { MerchantScopeService } from '@shared/application/services/merchant-scope.service';
 import type { JwtPayload } from '@modules/identity/infrastructure/strategies/jwt.strategy';
 import { ReconciliationService } from '../../application/services/reconciliation.service';
 import {
@@ -19,14 +21,29 @@ import {
   ResolveExceptionDto,
 } from '../dto/reconciliation.dto';
 
+function toActor(user: JwtPayload): ActorContext {
+  return {
+    sub: user.sub,
+    email: user.email,
+    acquirerId: user.acquirerId,
+    merchantId: user.merchantId,
+    roles: user.roles,
+    permissions: user.permissions,
+  };
+}
+
+/** Handoff §recon/§recondet. Read access is merchant-scoped — see MerchantScopeService. */
 @ApiTags('Reconciliation')
 @ApiBearerAuth('access-token')
 @Controller('reconciliation')
 export class ReconciliationController {
-  constructor(private readonly reconciliation: ReconciliationService) {}
+  constructor(
+    private readonly reconciliation: ReconciliationService,
+    private readonly scope: MerchantScopeService,
+  ) {}
 
   @Post('run')
-  @RequirePermissions(Permission.RECONCILIATION_READ)
+  @RequirePermissions(Permission.RECONCILIATION_RESOLVE)
   @ApiOperation({
     summary: 'Re-run the ledger-vs-TIPS-report match for a merchant/cycle date',
   })
@@ -39,26 +56,43 @@ export class ReconciliationController {
 
   @Get('exceptions')
   @RequirePermissions(Permission.RECONCILIATION_READ)
-  @ApiOperation({ summary: 'Exception queue — filterable, paginated' })
-  list(@Query() query: ReconciliationQueryDto) {
-    return this.reconciliation.list(query);
+  @ApiOperation({
+    summary:
+      'Exception queue — filterable, paginated, merchant-scoped for merchant actors',
+  })
+  list(
+    @Query() query: ReconciliationQueryDto,
+    @CurrentUser() user: JwtPayload,
+  ) {
+    const merchantId = this.scope.scopeMerchantId(
+      toActor(user),
+      query.merchantId,
+    );
+    return this.reconciliation.list({ ...query, merchantId });
   }
 
   @Get('exceptions/:id')
   @RequirePermissions(Permission.RECONCILIATION_READ)
   @ApiOperation({ summary: 'Single exception detail' })
-  getById(@Param('id', ParseUUIDPipe) id: string) {
-    return this.reconciliation.getById(id);
+  async getById(
+    @Param('id', ParseUUIDPipe) id: string,
+    @CurrentUser() user: JwtPayload,
+  ) {
+    const exception = await this.reconciliation.getById(id);
+    this.scope.assertCanAccessMerchant(toActor(user), exception.merchantId);
+    return exception;
   }
 
   @Post('exceptions/:id/resolve')
   @RequirePermissions(Permission.RECONCILIATION_RESOLVE)
   @ApiOperation({ summary: 'Resolve or write off an exception' })
-  resolve(
+  async resolve(
     @Param('id', ParseUUIDPipe) id: string,
     @Body() dto: ResolveExceptionDto,
     @CurrentUser() user: JwtPayload,
   ) {
+    const exception = await this.reconciliation.getById(id);
+    this.scope.assertCanAccessMerchant(toActor(user), exception.merchantId);
     return this.reconciliation.resolve(id, dto.status, dto.notes, user.sub);
   }
 }

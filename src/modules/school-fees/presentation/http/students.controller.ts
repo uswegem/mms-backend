@@ -23,6 +23,8 @@ import {
 import { RequirePermissions } from '@infrastructure/auth/rbac/decorators/permissions.decorator';
 import { Permission } from '@infrastructure/auth/rbac/enums/permission.enum';
 import { CurrentUser } from '@shared/application/decorators/current-user.decorator';
+import { ActorContext } from '@shared/application/interfaces/actor-context.interface';
+import { MerchantScopeService } from '@shared/application/services/merchant-scope.service';
 import type { JwtPayload } from '@modules/identity/infrastructure/strategies/jwt.strategy';
 import { StudentAliasService } from '../../application/services/student-alias.service';
 import { BulkStudentUploadService } from '../../application/services/bulk-student-upload.service';
@@ -33,6 +35,17 @@ import {
   SendQrDto,
 } from '../dto/student.dto';
 
+function toActor(user: JwtPayload): ActorContext {
+  return {
+    sub: user.sub,
+    email: user.email,
+    acquirerId: user.acquirerId,
+    merchantId: user.merchantId,
+    roles: user.roles,
+    permissions: user.permissions,
+  };
+}
+
 @ApiTags('Students')
 @ApiBearerAuth('access-token')
 @Controller('schools/:merchantId/students')
@@ -41,6 +54,7 @@ export class StudentsController {
     private readonly students: StudentAliasService,
     private readonly bulkUpload: BulkStudentUploadService,
     private readonly poster: PosterRenderer,
+    private readonly scope: MerchantScopeService,
   ) {}
 
   // ── List ──────────────────────────────────────────────────────────────────
@@ -48,7 +62,11 @@ export class StudentsController {
   @Get()
   @RequirePermissions(Permission.SCHOOL_STUDENT_READ)
   @ApiOperation({ summary: 'List school students with Lipa Namba aliases' })
-  list(@Param('merchantId', ParseUUIDPipe) merchantId: string) {
+  list(
+    @Param('merchantId', ParseUUIDPipe) merchantId: string,
+    @CurrentUser() user: JwtPayload,
+  ) {
+    this.scope.assertCanAccessMerchant(toActor(user), merchantId);
     return this.students.listStudents(merchantId);
   }
 
@@ -65,6 +83,7 @@ export class StudentsController {
     @Body() dto: CreateStudentDto,
     @Headers('idempotency-key') idempotencyKeyHeader?: string,
   ) {
+    this.scope.assertCanAccessMerchant(toActor(user), merchantId);
     return this.students.createStudent(
       merchantId,
       {
@@ -90,10 +109,12 @@ export class StudentsController {
   })
   @UseInterceptors(FileInterceptor('file'))
   async bulkPreview(
-    @Param('merchantId', ParseUUIDPipe) _merchantId: string,
+    @Param('merchantId', ParseUUIDPipe) merchantId: string,
+    @CurrentUser() user: JwtPayload,
     @UploadedFile() file?: { buffer: Buffer },
     @Body() body?: { csv?: string },
   ) {
+    this.scope.assertCanAccessMerchant(toActor(user), merchantId);
     const rows = this.bulkUpload.parseInput(file, body?.csv);
     const withDupes = this.bulkUpload.flagFileDuplicates(rows);
     const valid = withDupes.filter((r) => r.valid).length;
@@ -116,6 +137,7 @@ export class StudentsController {
     @Param('merchantId', ParseUUIDPipe) merchantId: string,
     @Body() dto: BulkConfirmDto,
   ) {
+    this.scope.assertCanAccessMerchant(toActor(user), merchantId);
     return this.students.confirmBulkImport(
       merchantId,
       dto.rows,
@@ -133,10 +155,12 @@ export class StudentsController {
     summary: 'Queue QR poster delivery to parent via email and/or SMS',
   })
   async sendQr(
-    @Param('merchantId', ParseUUIDPipe) _merchantId: string,
+    @Param('merchantId', ParseUUIDPipe) merchantId: string,
     @Param('studentId', ParseUUIDPipe) studentId: string,
     @Body() dto: SendQrDto,
+    @CurrentUser() user: JwtPayload,
   ) {
+    this.scope.assertCanAccessMerchant(toActor(user), merchantId);
     return this.students.sendQrToParent(studentId, dto.channels);
   }
 
@@ -146,9 +170,12 @@ export class StudentsController {
   @RequirePermissions(Permission.SCHOOL_STUDENT_READ)
   @ApiOperation({ summary: 'Download single-student QR poster as PDF' })
   async downloadPdf(
+    @Param('merchantId', ParseUUIDPipe) merchantId: string,
     @Param('studentId', ParseUUIDPipe) studentId: string,
+    @CurrentUser() user: JwtPayload,
     @Res() res: Response,
   ) {
+    this.scope.assertCanAccessMerchant(toActor(user), merchantId);
     const student = await this.students.getStudentWithQr(studentId);
 
     const tlvPayload =
