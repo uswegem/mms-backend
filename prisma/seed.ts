@@ -671,14 +671,6 @@ async function main() {
     },
   });
 
-  for (const block of ['780', '781', '782']) {
-    await prisma.aliasBlockSequence.upsert({
-      where: { block },
-      update: {},
-      create: { block, lastSeq: 0 },
-    });
-  }
-
   for (const perm of PERMISSIONS) {
     await prisma.permission.upsert({
       where: { code: perm.code },

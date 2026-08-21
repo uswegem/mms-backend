@@ -1,0 +1,11 @@
+-- Drop AliasBlockSequence — dead scaffolding from an earlier per-block
+-- sequence design that was never wired into any application code. Live
+-- Lipa Namba alias issuance reads/writes GlobalAliasSequence
+-- (global_alias_sequences) instead; see MerchantAliasService.
+--
+-- Found unused while investigating why alias creation failed for
+-- ONB-2026-000016: this table's rows (seeded to lastSeq=0 for blocks
+-- 780/781/782) were never consulted by the code that actually issues
+-- aliases, and its data had already drifted from reality by the time it
+-- was noticed.
+DROP TABLE IF EXISTS "alias_block_sequences";

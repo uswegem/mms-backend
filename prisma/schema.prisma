@@ -1315,16 +1315,6 @@ model StudentAliasSequence {
   @@map("student_alias_sequences")
 }
 
-/// Per-block sequence for the 8-digit Lipa Namba alias (AAA-CCCC-S). One row
-/// per allocated 3-digit acquirer block (780/781/782); allocation tries blocks
-/// in order and rolls over once a block's 4-digit space (0000-9999) is used up.
-model AliasBlockSequence {
-  block   String @id @db.Char(3)
-  lastSeq Int    @default(0) @map("last_seq")
-
-  @@map("alias_block_sequences")
-}
-
 /// Sequence for TANQR tag 26/02 Merchant ID (up to 15 digits) — distinct from
 /// the 8-digit Lipa Namba alias (tag 62/03). Assigned once per merchant via
 /// TipsRegistration.merchantId15 and never reassigned.
